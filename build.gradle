@@ -1,0 +1,83 @@
+plugins {
+    id "java"
+}
+
+allprojects {
+    group = "com.datausher"
+    version = "0.1.0-SNAPSHOT"
+}
+
+subprojects {
+    apply plugin: "java-library"
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+        options.release = 21
+    }
+}
+
+project(":platform-kernel:shared-types") {
+    dependencies {
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:module-contract") {
+    dependencies {
+        api project(":platform-kernel:shared-types")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:configuration") {
+    dependencies {
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:observability") {
+    dependencies {
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":datausher-app") {
+    apply plugin: "application"
+
+    dependencies {
+        implementation project(":platform-kernel:shared-types")
+        implementation project(":platform-kernel:module-contract")
+        implementation project(":platform-kernel:configuration")
+        implementation project(":platform-kernel:observability")
+    }
+
+    application {
+        mainClass = "com.datausher.app.DataUsherApplication"
+    }
+}

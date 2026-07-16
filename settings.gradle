@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
+rootProject.name = "datausher"
+
+include(
+    "platform-kernel:shared-types",
+    "platform-kernel:module-contract",
+    "platform-kernel:configuration",
+    "platform-kernel:observability",
+    "datausher-app"
+)
