@@ -4,10 +4,13 @@ import com.datausher.governance.resource.api.RegisteredResource;
 import com.datausher.governance.resource.api.ResourceQuery;
 import com.datausher.governance.resource.api.ResourceRef;
 import com.datausher.governance.resource.api.ResourceTypeDefinition;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -79,7 +82,9 @@ public final class InMemoryResourceStore implements ResourceStore {
     }
 
     @Override
-    public List<RegisteredResource> search(ResourceQuery query) {
+    public PageResult<RegisteredResource> search(ResourceQuery query, PageRequest pageRequest) {
+        Objects.requireNonNull(query, "query must not be null");
+        Objects.requireNonNull(pageRequest, "pageRequest must not be null");
         List<RegisteredResource> matches = new ArrayList<>();
         for (RegisteredResource resource : resources.values()) {
             if ((query.resourceType() == null || query.resourceType().equals(resource.ref().resourceType()))
@@ -89,6 +94,14 @@ public final class InMemoryResourceStore implements ResourceStore {
             }
         }
         matches.sort(Comparator.comparing(resource -> resource.ref().canonicalValue()));
-        return List.copyOf(matches);
+        int fromIndex = (int) Math.min(pageRequest.offset(), matches.size());
+        int toIndex = (int) Math.min(
+                (long) fromIndex + pageRequest.size(), matches.size());
+        return new PageResult<>(
+                matches.subList(fromIndex, toIndex),
+                matches.size(),
+                pageRequest.page(),
+                pageRequest.size()
+        );
     }
 }

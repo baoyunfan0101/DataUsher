@@ -10,12 +10,14 @@ import com.datausher.governance.resource.api.ResourceTypeDefinition;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.time.Clock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -44,9 +46,36 @@ class InMemoryResourceStoreTest {
         ));
 
         assertEquals(1, store.search(new ResourceQuery(
-                "table", ResourceScope.project("project-1"), ResourceLifecycle.ACTIVE)).size());
+                "table", ResourceScope.project("project-1"), ResourceLifecycle.ACTIVE),
+                PageRequest.firstPage()).total());
         assertThrows(IllegalStateException.class, () -> store.registerType(
                 new ResourceTypeDefinition("table", "other-module", "Table", Set.of("read"))));
+    }
+
+    @Test
+    void appliesResourcePaginationInsideTheStore() {
+        InMemoryResourceStore store = new InMemoryResourceStore();
+        store.create(resource("table-2"));
+        store.create(resource("table-1"));
+
+        var result = store.search(
+                new ResourceQuery(null, null, null),
+                new PageRequest(2, 1, List.of())
+        );
+
+        assertEquals(2, result.total());
+        assertEquals("table-2", result.items().get(0).ref().resourceId());
+    }
+
+    private static RegisteredResource resource(String resourceId) {
+        return new RegisteredResource(
+                ResourceRef.global("table", resourceId),
+                resourceId,
+                ResourceLifecycle.ACTIVE,
+                Instant.parse("2026-07-17T00:00:00Z"),
+                "system",
+                Map.of()
+        );
     }
 
     @Test

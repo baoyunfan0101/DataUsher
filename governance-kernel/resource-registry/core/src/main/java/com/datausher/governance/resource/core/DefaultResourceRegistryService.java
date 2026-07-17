@@ -181,11 +181,7 @@ public final class DefaultResourceRegistryService
     public PageResult<RegisteredResource> search(ResourceQuery query, PageRequest pageRequest) {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        List<RegisteredResource> resources = store.search(query);
-        int fromIndex = (int) Math.min(pageRequest.offset(), resources.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), resources.size());
-        return new PageResult<>(resources.subList(fromIndex, toIndex), resources.size(),
-                pageRequest.page(), pageRequest.size());
+        return store.search(query, pageRequest);
     }
 
     private static AuditTarget toAuditTarget(ResourceRef ref) {

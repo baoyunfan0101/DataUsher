@@ -4,6 +4,8 @@ import com.datausher.governance.resource.api.RegisteredResource;
 import com.datausher.governance.resource.api.ResourceQuery;
 import com.datausher.governance.resource.api.ResourceRef;
 import com.datausher.governance.resource.api.ResourceTypeDefinition;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,5 +27,5 @@ public interface ResourceStore {
 
     Optional<RegisteredResource> find(ResourceRef ref);
 
-    List<RegisteredResource> search(ResourceQuery query);
+    PageResult<RegisteredResource> search(ResourceQuery query, PageRequest pageRequest);
 }
