@@ -7,7 +7,6 @@ import com.datausher.governance.access.api.SubjectRef;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -27,10 +26,6 @@ public final class DefaultIdentityQueryService implements IdentityQueryService {
     public PageResult<Subject> search(SubjectQuery query, PageRequest pageRequest) {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        List<Subject> subjects = store.search(query);
-        int fromIndex = (int) Math.min(pageRequest.offset(), subjects.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), subjects.size());
-        return new PageResult<>(subjects.subList(fromIndex, toIndex), subjects.size(),
-                pageRequest.page(), pageRequest.size());
+        return store.search(query, pageRequest);
     }
 }

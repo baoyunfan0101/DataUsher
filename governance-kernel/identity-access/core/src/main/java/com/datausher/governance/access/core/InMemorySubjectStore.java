@@ -3,10 +3,13 @@ package com.datausher.governance.access.core;
 import com.datausher.governance.access.api.Subject;
 import com.datausher.governance.access.api.SubjectQuery;
 import com.datausher.governance.access.api.SubjectRef;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -25,7 +28,9 @@ public final class InMemorySubjectStore implements SubjectStore {
     }
 
     @Override
-    public List<Subject> search(SubjectQuery query) {
+    public PageResult<Subject> search(SubjectQuery query, PageRequest pageRequest) {
+        Objects.requireNonNull(query, "query must not be null");
+        Objects.requireNonNull(pageRequest, "pageRequest must not be null");
         List<Subject> matches = new ArrayList<>();
         for (Subject subject : subjects.values()) {
             String searchText = subject.ref().subjectId().toLowerCase() + " "
@@ -37,6 +42,14 @@ public final class InMemorySubjectStore implements SubjectStore {
             }
         }
         matches.sort(Comparator.comparing(subject -> subject.ref().canonicalValue()));
-        return List.copyOf(matches);
+        int fromIndex = (int) Math.min(pageRequest.offset(), matches.size());
+        int toIndex = (int) Math.min(
+                (long) fromIndex + pageRequest.size(), matches.size());
+        return new PageResult<>(
+                matches.subList(fromIndex, toIndex),
+                matches.size(),
+                pageRequest.page(),
+                pageRequest.size()
+        );
     }
 }
