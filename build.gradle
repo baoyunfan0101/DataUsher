@@ -112,6 +112,23 @@ project(":governance-kernel:identity-access-core") {
     }
 }
 
+project(":integration-kernel:integration-runtime-core") {
+    dependencies {
+        api project(":integration-kernel:integration-runtime-api")
+    }
+}
+
+configure([
+        project(":integration-kernel:datasource-adapters-api"),
+        project(":integration-kernel:compute-engine-adapters-api"),
+        project(":integration-kernel:scheduler-adapters-api"),
+        project(":integration-kernel:llm-provider-adapters-api")
+]) {
+    dependencies {
+        api project(":integration-kernel:integration-runtime-api")
+    }
+}
+
 project(":datausher-app") {
     apply plugin: "application"
 
@@ -124,6 +141,11 @@ project(":datausher-app") {
         implementation project(":governance-kernel:project-environment-core")
         implementation project(":governance-kernel:resource-registry-core")
         implementation project(":governance-kernel:identity-access-core")
+        implementation project(":integration-kernel:integration-runtime-core")
+        implementation project(":integration-kernel:datasource-adapters-api")
+        implementation project(":integration-kernel:compute-engine-adapters-api")
+        implementation project(":integration-kernel:scheduler-adapters-api")
+        implementation project(":integration-kernel:llm-provider-adapters-api")
     }
 
     application {
@@ -148,6 +170,12 @@ configure([
         project(":governance-kernel:resource-registry-core"),
         project(":governance-kernel:identity-access-api"),
         project(":governance-kernel:identity-access-core"),
+        project(":integration-kernel:integration-runtime-api"),
+        project(":integration-kernel:integration-runtime-core"),
+        project(":integration-kernel:datasource-adapters-api"),
+        project(":integration-kernel:compute-engine-adapters-api"),
+        project(":integration-kernel:scheduler-adapters-api"),
+        project(":integration-kernel:llm-provider-adapters-api"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -215,6 +243,22 @@ def allowedProjectDependencies = [
                 ":platform-kernel:audit-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
+        ":integration-kernel:integration-runtime-api": [] as Set,
+        ":integration-kernel:integration-runtime-core": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":integration-kernel:datasource-adapters-api": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":integration-kernel:compute-engine-adapters-api": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":integration-kernel:scheduler-adapters-api": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":integration-kernel:llm-provider-adapters-api": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
         ":datausher-app": [
                 ":platform-kernel:shared-types-core",
                 ":platform-kernel:module-contract-core",
@@ -223,7 +267,12 @@ def allowedProjectDependencies = [
                 ":platform-kernel:observability-core",
                 ":governance-kernel:project-environment-core",
                 ":governance-kernel:resource-registry-core",
-                ":governance-kernel:identity-access-core"
+                ":governance-kernel:identity-access-core",
+                ":integration-kernel:integration-runtime-core",
+                ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:compute-engine-adapters-api",
+                ":integration-kernel:scheduler-adapters-api",
+                ":integration-kernel:llm-provider-adapters-api"
         ] as Set
 ]
 
