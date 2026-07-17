@@ -1,0 +1,12 @@
+package com.datausher.governance.access.api;
+
+public enum AccessDecisionCode {
+    ALLOWED,
+    DENIED_BY_POLICY,
+    DENIED_NO_MATCHING_POLICY,
+    DENIED_UNKNOWN_SUBJECT,
+    DENIED_INACTIVE_SUBJECT,
+    DENIED_UNKNOWN_RESOURCE,
+    DENIED_INACTIVE_RESOURCE,
+    DENIED_UNSUPPORTED_ACTION
+}

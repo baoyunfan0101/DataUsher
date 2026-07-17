@@ -8,5 +8,6 @@ values. `audit-core` contains the default journal and storage port.
 - Business modules depend on `audit-api` only.
 - The application composition root selects and constructs `audit-core` implementations.
 - Record immutable security and operational facts after state-changing decisions.
+- Use `AuditedCommandExecutor` when a state change must be compensated if audit recording fails.
 - Use `AuditTarget` instead of governance types so platform-kernel never depends upward.
 - Keep database clients and storage technology outside the API project.
