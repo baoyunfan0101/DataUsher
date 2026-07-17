@@ -15,9 +15,36 @@ dependencyResolutionManagement {
 rootProject.name = "datausher"
 
 include(
-    "platform-kernel:shared-types",
-    "platform-kernel:module-contract",
-    "platform-kernel:configuration",
-    "platform-kernel:observability",
+    "platform-kernel:shared-types-api",
+    "platform-kernel:shared-types-core",
+    "platform-kernel:module-contract-api",
+    "platform-kernel:module-contract-core",
+    "platform-kernel:configuration-api",
+    "platform-kernel:configuration-core",
+    "platform-kernel:audit-api",
+    "platform-kernel:audit-core",
+    "platform-kernel:observability-api",
+    "platform-kernel:observability-core",
     "datausher-app"
 )
+
+project(":platform-kernel:shared-types-api").projectDir =
+        file("platform-kernel/shared-types/api")
+project(":platform-kernel:shared-types-core").projectDir =
+        file("platform-kernel/shared-types/core")
+project(":platform-kernel:module-contract-api").projectDir =
+        file("platform-kernel/module-contract/api")
+project(":platform-kernel:module-contract-core").projectDir =
+        file("platform-kernel/module-contract/core")
+project(":platform-kernel:configuration-api").projectDir =
+        file("platform-kernel/configuration/api")
+project(":platform-kernel:configuration-core").projectDir =
+        file("platform-kernel/configuration/core")
+project(":platform-kernel:audit-api").projectDir =
+        file("platform-kernel/audit/api")
+project(":platform-kernel:audit-core").projectDir =
+        file("platform-kernel/audit/core")
+project(":platform-kernel:observability-api").projectDir =
+        file("platform-kernel/observability/api")
+project(":platform-kernel:observability-core").projectDir =
+        file("platform-kernel/observability/core")

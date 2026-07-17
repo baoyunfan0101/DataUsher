@@ -22,7 +22,7 @@ subprojects {
     }
 }
 
-project(":platform-kernel:shared-types") {
+project(":platform-kernel:shared-types-api") {
     dependencies {
         testImplementation platform("org.junit:junit-bom:5.11.4")
         testImplementation "org.junit.jupiter:junit-jupiter"
@@ -33,9 +33,9 @@ project(":platform-kernel:shared-types") {
     }
 }
 
-project(":platform-kernel:module-contract") {
+project(":platform-kernel:shared-types-core") {
     dependencies {
-        api project(":platform-kernel:shared-types")
+        api project(":platform-kernel:shared-types-api")
         testImplementation platform("org.junit:junit-bom:5.11.4")
         testImplementation "org.junit.jupiter:junit-jupiter"
     }
@@ -45,7 +45,32 @@ project(":platform-kernel:module-contract") {
     }
 }
 
-project(":platform-kernel:configuration") {
+project(":platform-kernel:module-contract-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:module-contract-core") {
+    dependencies {
+        api project(":platform-kernel:module-contract-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:configuration-api") {
     dependencies {
         testImplementation platform("org.junit:junit-bom:5.11.4")
         testImplementation "org.junit.jupiter:junit-jupiter"
@@ -56,8 +81,58 @@ project(":platform-kernel:configuration") {
     }
 }
 
-project(":platform-kernel:observability") {
+project(":platform-kernel:configuration-core") {
     dependencies {
+        api project(":platform-kernel:configuration-api")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:audit-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:audit-core") {
+    dependencies {
+        api project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:shared-types-core")
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:observability-api") {
+    dependencies {
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+project(":platform-kernel:observability-core") {
+    dependencies {
+        api project(":platform-kernel:observability-api")
         testImplementation platform("org.junit:junit-bom:5.11.4")
         testImplementation "org.junit.jupiter:junit-jupiter"
     }
@@ -71,13 +146,79 @@ project(":datausher-app") {
     apply plugin: "application"
 
     dependencies {
-        implementation project(":platform-kernel:shared-types")
-        implementation project(":platform-kernel:module-contract")
-        implementation project(":platform-kernel:configuration")
-        implementation project(":platform-kernel:observability")
+        implementation project(":platform-kernel:shared-types-core")
+        implementation project(":platform-kernel:module-contract-core")
+        implementation project(":platform-kernel:configuration-core")
+        implementation project(":platform-kernel:audit-core")
+        implementation project(":platform-kernel:observability-core")
     }
 
     application {
         mainClass = "com.datausher.app.DataUsherApplication"
     }
+}
+
+def allowedProjectDependencies = [
+        ":platform-kernel:shared-types-api": [] as Set,
+        ":platform-kernel:shared-types-core": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:module-contract-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:module-contract-core": [
+                ":platform-kernel:module-contract-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:configuration-api": [] as Set,
+        ":platform-kernel:configuration-core": [
+                ":platform-kernel:configuration-api"
+        ] as Set,
+        ":platform-kernel:audit-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:audit-core": [
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:observability-api": [] as Set,
+        ":platform-kernel:observability-core": [
+                ":platform-kernel:observability-api"
+        ] as Set,
+        ":datausher-app": [
+                ":platform-kernel:shared-types-core",
+                ":platform-kernel:module-contract-core",
+                ":platform-kernel:configuration-core",
+                ":platform-kernel:audit-core",
+                ":platform-kernel:observability-core"
+        ] as Set
+]
+
+tasks.register("verifyModuleBoundaries") {
+    group = "verification"
+    description = "Fails when a project dependency violates the approved module graph."
+
+    doLast {
+        allowedProjectDependencies.each { projectPath, allowedPaths ->
+            def targetProject = rootProject.project(projectPath)
+            def actualPaths = targetProject.configurations
+                    .findAll { it.name in ["api", "implementation", "compileOnly"] }
+                    .collectMany { configuration ->
+                        configuration.dependencies.withType(ProjectDependency).collect {
+                            it.path
+                        }
+                    }
+                    .toSet()
+            def forbiddenPaths = actualPaths - allowedPaths
+            if (!forbiddenPaths.isEmpty()) {
+                throw new GradleException(
+                        "Module ${projectPath} has forbidden project dependencies: ${forbiddenPaths.sort()}"
+                )
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn tasks.named("verifyModuleBoundaries")
 }
