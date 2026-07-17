@@ -22,38 +22,15 @@ subprojects {
     }
 }
 
-project(":platform-kernel:shared-types-api") {
-    dependencies {
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
-    }
-}
-
 project(":platform-kernel:shared-types-core") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
 project(":platform-kernel:module-contract-api") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
@@ -61,47 +38,18 @@ project(":platform-kernel:module-contract-core") {
     dependencies {
         api project(":platform-kernel:module-contract-api")
         implementation project(":platform-kernel:shared-types-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
-    }
-}
-
-project(":platform-kernel:configuration-api") {
-    dependencies {
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
 project(":platform-kernel:configuration-core") {
     dependencies {
         api project(":platform-kernel:configuration-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
 project(":platform-kernel:audit-api") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
@@ -110,35 +58,57 @@ project(":platform-kernel:audit-core") {
         api project(":platform-kernel:audit-api")
         implementation project(":platform-kernel:shared-types-api")
         testImplementation project(":platform-kernel:shared-types-core")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
-    }
-}
-
-project(":platform-kernel:observability-api") {
-    dependencies {
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
 project(":platform-kernel:observability-core") {
     dependencies {
         api project(":platform-kernel:observability-api")
-        testImplementation platform("org.junit:junit-bom:5.11.4")
-        testImplementation "org.junit.jupiter:junit-jupiter"
     }
+}
 
-    test {
-        useJUnitPlatform()
+project(":governance-kernel:project-environment-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:project-environment-core") {
+    dependencies {
+        api project(":governance-kernel:project-environment-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:resource-registry-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:resource-registry-core") {
+    dependencies {
+        api project(":governance-kernel:resource-registry-api")
+        implementation project(":governance-kernel:project-environment-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:identity-access-api") {
+    dependencies {
+        api project(":governance-kernel:resource-registry-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:identity-access-core") {
+    dependencies {
+        api project(":governance-kernel:identity-access-api")
+        implementation project(":governance-kernel:resource-registry-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
     }
 }
 
@@ -151,10 +121,43 @@ project(":datausher-app") {
         implementation project(":platform-kernel:configuration-core")
         implementation project(":platform-kernel:audit-core")
         implementation project(":platform-kernel:observability-core")
+        implementation project(":governance-kernel:project-environment-core")
+        implementation project(":governance-kernel:resource-registry-core")
+        implementation project(":governance-kernel:identity-access-core")
     }
 
     application {
         mainClass = "com.datausher.app.DataUsherApplication"
+    }
+}
+
+configure([
+        project(":platform-kernel:shared-types-api"),
+        project(":platform-kernel:shared-types-core"),
+        project(":platform-kernel:module-contract-api"),
+        project(":platform-kernel:module-contract-core"),
+        project(":platform-kernel:configuration-api"),
+        project(":platform-kernel:configuration-core"),
+        project(":platform-kernel:audit-api"),
+        project(":platform-kernel:audit-core"),
+        project(":platform-kernel:observability-api"),
+        project(":platform-kernel:observability-core"),
+        project(":governance-kernel:project-environment-api"),
+        project(":governance-kernel:project-environment-core"),
+        project(":governance-kernel:resource-registry-api"),
+        project(":governance-kernel:resource-registry-core"),
+        project(":governance-kernel:identity-access-api"),
+        project(":governance-kernel:identity-access-core"),
+        project(":datausher-app")
+]) {
+    dependencies {
+        testImplementation platform("org.junit:junit-bom:5.11.4")
+        testImplementation "org.junit.jupiter:junit-jupiter"
+        testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    }
+
+    test {
+        useJUnitPlatform()
     }
 }
 
@@ -185,12 +188,42 @@ def allowedProjectDependencies = [
         ":platform-kernel:observability-core": [
                 ":platform-kernel:observability-api"
         ] as Set,
+        ":governance-kernel:project-environment-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:project-environment-core": [
+                ":governance-kernel:project-environment-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:resource-registry-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:resource-registry-core": [
+                ":governance-kernel:resource-registry-api",
+                ":governance-kernel:project-environment-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:identity-access-api": [
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:identity-access-core": [
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
         ":datausher-app": [
                 ":platform-kernel:shared-types-core",
                 ":platform-kernel:module-contract-core",
                 ":platform-kernel:configuration-core",
                 ":platform-kernel:audit-core",
-                ":platform-kernel:observability-core"
+                ":platform-kernel:observability-core",
+                ":governance-kernel:project-environment-core",
+                ":governance-kernel:resource-registry-core",
+                ":governance-kernel:identity-access-core"
         ] as Set
 ]
 
