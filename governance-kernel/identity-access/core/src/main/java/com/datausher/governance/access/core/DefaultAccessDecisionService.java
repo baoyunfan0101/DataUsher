@@ -20,7 +20,6 @@ import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.shared.time.Clock;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -86,13 +85,12 @@ public final class DefaultAccessDecisionService implements AccessDecisionService
                     "resource is not active", null);
         }
 
-        List<AccessPolicy> policies = policyStore.findMatching(
-                request.subjects(), request.action(), request.resource());
-        if (policies.isEmpty()) {
+        AccessPolicy policy = policyStore.findEffective(
+                request.subjects(), request.action(), request.resource()).orElse(null);
+        if (policy == null) {
             return audited(request, false, AccessDecisionCode.DENIED_NO_MATCHING_POLICY,
                     "no matching access policy", null);
         }
-        AccessPolicy policy = policies.get(0);
         if (policy.effect() == PolicyEffect.DENY) {
             return audited(request, false, AccessDecisionCode.DENIED_BY_POLICY,
                     "access denied by policy", policy.policyId());

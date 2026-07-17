@@ -6,7 +6,6 @@ import com.datausher.governance.resource.api.ResourceRef;
 import com.datausher.governance.resource.api.ResourceScope;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,12 +20,9 @@ class InMemoryAccessPolicyStoreTest {
         store.save(policy("high-allow", subject, PolicyEffect.ALLOW, 100));
         store.save(policy("high-deny", subject, PolicyEffect.DENY, 100));
 
-        assertEquals(
-                List.of("high-deny", "high-allow", "low-deny"),
-                store.findMatching(Set.of(subject), "read", resource).stream()
-                        .map(AccessPolicy::policyId)
-                        .toList()
-        );
+        assertEquals("high-deny", store.findEffective(Set.of(subject), "read", resource)
+                .orElseThrow()
+                .policyId());
     }
 
     private static AccessPolicy policy(
