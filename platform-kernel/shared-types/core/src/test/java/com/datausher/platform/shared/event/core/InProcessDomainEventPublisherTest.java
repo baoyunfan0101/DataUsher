@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,7 +61,7 @@ class InProcessDomainEventPublisherTest {
     }
 
     private static BaseDomainEvent event(String eventId) {
-        return new BaseDomainEvent(eventId, "Created", "catalog", NOW, requestContext(), Map.of());
+        return new BaseDomainEvent(eventId, "Created", "catalog", NOW, requestContext());
     }
 
     private static RequestContext requestContext() {

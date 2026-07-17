@@ -10,5 +10,6 @@ contracts. `shared-types-core` contains JDK-backed default implementations.
 - Inject `Clock` and `IdGenerator`; do not read time or generate IDs inside domain logic.
 - Enforce query-specific page-size limits at the consuming boundary.
 - Supply actor, request, and event time explicitly.
-- Treat context attributes, event payloads, and paging collections as immutable snapshots.
+- Define event data as immutable types in the owning module's API project.
+- Treat context attributes and paging collections as immutable snapshots.
 - In-process event delivery is synchronous and attempts every subscriber before reporting failure.
