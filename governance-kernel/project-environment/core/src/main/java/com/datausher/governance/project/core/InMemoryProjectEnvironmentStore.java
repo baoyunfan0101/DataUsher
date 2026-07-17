@@ -2,11 +2,14 @@ package com.datausher.governance.project.core;
 
 import com.datausher.governance.project.api.Environment;
 import com.datausher.governance.project.api.Project;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -85,10 +88,19 @@ public final class InMemoryProjectEnvironmentStore implements ProjectEnvironment
     }
 
     @Override
-    public List<Project> listProjects() {
+    public PageResult<Project> listProjects(PageRequest pageRequest) {
+        Objects.requireNonNull(pageRequest, "pageRequest must not be null");
         List<Project> projects = new ArrayList<>(projectsById.values());
         projects.sort(Comparator.comparing(Project::key));
-        return List.copyOf(projects);
+        int fromIndex = (int) Math.min(pageRequest.offset(), projects.size());
+        int toIndex = (int) Math.min(
+                (long) fromIndex + pageRequest.size(), projects.size());
+        return new PageResult<>(
+                projects.subList(fromIndex, toIndex),
+                projects.size(),
+                pageRequest.page(),
+                pageRequest.size()
+        );
     }
 
     @Override

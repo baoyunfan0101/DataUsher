@@ -4,6 +4,7 @@ import com.datausher.governance.project.api.Environment;
 import com.datausher.governance.project.api.EnvironmentStatus;
 import com.datausher.governance.project.api.Project;
 import com.datausher.governance.project.api.ProjectStatus;
+import com.datausher.platform.shared.page.PageRequest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -33,6 +34,18 @@ class InMemoryProjectEnvironmentStoreTest {
                 .toList());
         assertThrows(IllegalStateException.class, () -> store.create(
                 project("project-2", "analytics"), List.of()));
+    }
+
+    @Test
+    void appliesProjectPaginationInsideTheStore() {
+        InMemoryProjectEnvironmentStore store = new InMemoryProjectEnvironmentStore();
+        store.create(project("project-2", "beta"), List.of());
+        store.create(project("project-1", "alpha"), List.of());
+
+        var result = store.listProjects(new PageRequest(2, 1, List.of()));
+
+        assertEquals(2, result.total());
+        assertEquals(List.of("beta"), result.items().stream().map(Project::key).toList());
     }
 
     private static Project project(String projectId, String key) {

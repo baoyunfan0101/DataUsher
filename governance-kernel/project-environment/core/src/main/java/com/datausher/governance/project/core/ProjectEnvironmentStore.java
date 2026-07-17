@@ -2,6 +2,8 @@ package com.datausher.governance.project.core;
 
 import com.datausher.governance.project.api.Environment;
 import com.datausher.governance.project.api.Project;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,7 +19,7 @@ public interface ProjectEnvironmentStore {
 
     Optional<Project> findProjectByKey(String key);
 
-    List<Project> listProjects();
+    PageResult<Project> listProjects(PageRequest pageRequest);
 
     Optional<Environment> findEnvironmentById(String environmentId);
 

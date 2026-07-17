@@ -148,11 +148,7 @@ public final class DefaultProjectEnvironmentService
     @Override
     public PageResult<Project> list(PageRequest pageRequest) {
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        List<Project> projects = store.listProjects();
-        int fromIndex = (int) Math.min(pageRequest.offset(), projects.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), projects.size());
-        return new PageResult<>(projects.subList(fromIndex, toIndex), projects.size(),
-                pageRequest.page(), pageRequest.size());
+        return store.listProjects(pageRequest);
     }
 
     @Override
