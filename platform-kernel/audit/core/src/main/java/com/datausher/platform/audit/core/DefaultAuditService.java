@@ -11,7 +11,6 @@ import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
 import com.datausher.platform.shared.time.Clock;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -60,10 +59,6 @@ public final class DefaultAuditService implements AuditCommandService, AuditQuer
     public PageResult<AuditEvent> search(AuditQuery query, PageRequest pageRequest) {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        List<AuditEvent> matches = store.find(query);
-        int fromIndex = (int) Math.min(pageRequest.offset(), matches.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), matches.size());
-        return new PageResult<>(matches.subList(fromIndex, toIndex), matches.size(),
-                pageRequest.page(), pageRequest.size());
+        return store.search(query, pageRequest);
     }
 }

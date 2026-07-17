@@ -2,8 +2,9 @@ package com.datausher.platform.audit.core;
 
 import com.datausher.platform.audit.api.AuditEvent;
 import com.datausher.platform.audit.api.AuditQuery;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface AuditEventStore {
@@ -11,5 +12,5 @@ public interface AuditEventStore {
 
     Optional<AuditEvent> findById(String auditId);
 
-    List<AuditEvent> find(AuditQuery query);
+    PageResult<AuditEvent> search(AuditQuery query, PageRequest pageRequest);
 }
