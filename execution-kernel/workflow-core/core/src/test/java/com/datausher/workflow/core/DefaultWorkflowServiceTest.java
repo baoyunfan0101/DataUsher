@@ -42,9 +42,10 @@ class DefaultWorkflowServiceTest {
         var clock = new SystemClock();
         var ids = new UuidIdGenerator();
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var service = new DefaultWorkflowService(
                 new InMemoryWorkflowStore(), resources(resourceRef), clock,
-                new CompensatingAuditedCommandExecutor(audit));
+                new CompensatingAuditedCommandExecutor(audit), ids, events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         WorkflowId workflowId = new WorkflowId("daily-orders");
         var workflow = service.create(new CreateWorkflowRequest(
@@ -57,6 +58,8 @@ class DefaultWorkflowServiceTest {
         assertEquals(1, version.version());
         assertEquals(version, service.findLatestVersion(workflowId).orElseThrow());
         assertEquals(2, service.findWorkflow(workflowId).orElseThrow().revision());
+        assertEquals(List.of("workflow.created", "workflow.version-created"),
+                events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     private static WorkflowTaskDefinition task(String key) {

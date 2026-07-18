@@ -109,7 +109,7 @@ class DefaultScriptPublicationServiceTest {
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
         var workflows = new DefaultWorkflowService(
                 new InMemoryWorkflowStore(), resources(workflowRef), clock,
-                new CompensatingAuditedCommandExecutor(audit));
+                new CompensatingAuditedCommandExecutor(audit), ids, event -> { });
         RequestContext context = RequestContext.system("request-1", Instant.now());
         WorkflowId workflowId = new WorkflowId("workflow-1");
         var workflow = workflows.create(new CreateWorkflowRequest(

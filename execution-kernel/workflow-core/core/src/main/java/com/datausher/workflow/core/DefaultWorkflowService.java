@@ -9,13 +9,18 @@ import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.shared.time.Clock;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.workflow.api.CreateWorkflowRequest;
 import com.datausher.workflow.api.CreateWorkflowVersionRequest;
 import com.datausher.workflow.api.WorkflowCommandService;
 import com.datausher.workflow.api.WorkflowDefinition;
+import com.datausher.workflow.api.WorkflowCreatedEvent;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowVersion;
+import com.datausher.workflow.api.WorkflowVersionCreatedEvent;
 
 import java.time.Instant;
 import java.util.List;
@@ -28,17 +33,23 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
     private final ResourceQueryService resources;
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
+    private final IdGenerator idGenerator;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultWorkflowService(
             WorkflowStore store,
             ResourceQueryService resources,
             Clock clock,
-            AuditedCommandExecutor commandExecutor
+            AuditedCommandExecutor commandExecutor,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.resources = Objects.requireNonNull(resources, "resources must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -49,7 +60,7 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
         WorkflowDefinition workflow = new WorkflowDefinition(
                 request.workflowId(), request.resourceRef(), request.displayName(), 0, 1,
                 now, now, request.requestContext().actor().actorId(), request.attributes());
-        return commandExecutor.execute(new AuditedCommand<>() {
+        WorkflowDefinition created = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public WorkflowDefinition execute() {
                 store.createWorkflow(workflow);
@@ -67,6 +78,9 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
                 store.deleteWorkflow(result);
             }
         });
+        eventPublisher.publish(new WorkflowCreatedEvent(
+                nextEventId(), now, request.requestContext(), created));
+        return created;
     }
 
     @Override
@@ -87,7 +101,7 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
                 current.workflowId(), current.resourceRef(), current.displayName(),
                 versionNumber, current.revision() + 1, current.createdAt(), now,
                 current.createdBy(), current.attributes());
-        return commandExecutor.execute(new AuditedCommand<>() {
+        WorkflowVersion created = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public WorkflowVersion execute() {
                 store.createVersion(current, updated, version);
@@ -105,6 +119,9 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
                 store.deleteVersion(updated, current, result);
             }
         });
+        eventPublisher.publish(new WorkflowVersionCreatedEvent(
+                nextEventId(), now, request.requestContext(), created));
+        return created;
     }
 
     @Override
@@ -148,5 +165,9 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
                 context, "workflow-core", action,
                 AuditTarget.global("workflow", workflow.workflowId().value()),
                 AuditOutcome.SUCCEEDED, details);
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(IdGenerationRequest.of("workflow", "domain-event"));
     }
 }

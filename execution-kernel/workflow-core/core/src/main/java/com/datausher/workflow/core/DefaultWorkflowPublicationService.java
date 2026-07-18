@@ -14,11 +14,15 @@ import com.datausher.integration.scheduler.api.SchedulerTaskDependency;
 import com.datausher.integration.scheduler.api.SchedulerTaskType;
 import com.datausher.integration.scheduler.api.WorkflowSchedulerAdapter;
 import com.datausher.platform.shared.time.Clock;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.workflow.api.PublishWorkflowRequest;
 import com.datausher.workflow.api.TaskDependencyCondition;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowPublication;
 import com.datausher.workflow.api.WorkflowPublicationService;
+import com.datausher.workflow.api.WorkflowPublishedEvent;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowSchedule;
 import com.datausher.workflow.api.WorkflowVersion;
@@ -36,6 +40,8 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
     private final AdapterInvocationExecutor invocationExecutor;
     private final Clock clock;
     private final Duration adapterTimeout;
+    private final IdGenerator idGenerator;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultWorkflowPublicationService(
             WorkflowQueryService workflows,
@@ -43,7 +49,9 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
             AdapterRegistry adapters,
             AdapterInvocationExecutor invocationExecutor,
             Clock clock,
-            Duration adapterTimeout
+            Duration adapterTimeout,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
     ) {
         this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
         this.store = Objects.requireNonNull(store, "store must not be null");
@@ -52,6 +60,8 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
                 invocationExecutor, "invocationExecutor must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.adapterTimeout = Objects.requireNonNull(adapterTimeout, "adapterTimeout must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         if (adapterTimeout.isZero() || adapterTimeout.isNegative()) {
             throw new IllegalArgumentException("adapterTimeout must be positive");
         }
@@ -80,8 +90,14 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
                 request.workflowId(), request.version(), published.adapterId(), published.bindingId(),
                 request.idempotencyKey(), published.externalWorkflowId(), published.revision(),
                 clock.now(), request.requestContext().actor().actorId());
-        WorkflowPublication stored = store.createOrFind(publication);
-        return requireSamePublication(stored, request);
+        WorkflowPublicationCreateResult creation = store.createOrFind(publication);
+        WorkflowPublication stored = requireSamePublication(creation.publication(), request);
+        if (creation.created()) {
+            eventPublisher.publish(new WorkflowPublishedEvent(
+                    idGenerator.nextIdValue(IdGenerationRequest.of("workflow", "domain-event")),
+                    stored.publishedAt(), request.requestContext(), stored));
+        }
+        return stored;
     }
 
     @Override

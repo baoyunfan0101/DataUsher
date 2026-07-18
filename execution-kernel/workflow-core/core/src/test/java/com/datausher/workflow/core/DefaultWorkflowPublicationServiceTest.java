@@ -26,6 +26,7 @@ import com.datausher.integration.scheduler.api.WorkflowTaskRunPage;
 import com.datausher.integration.scheduler.api.WorkflowTrigger;
 import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.time.core.SystemClock;
+import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.workflow.api.PublishWorkflowRequest;
 import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.WorkflowId;
@@ -56,9 +57,11 @@ class DefaultWorkflowPublicationServiceTest {
         WorkflowQueryService workflows = versions(version);
         var registry = new InMemoryAdapterRegistry();
         registry.register(new RecordingScheduler());
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var service = new DefaultWorkflowPublicationService(
                 workflows, new InMemoryWorkflowPublicationStore(), registry,
-                new DirectInvocationExecutor(), new SystemClock(), Duration.ofSeconds(30));
+                new DirectInvocationExecutor(), new SystemClock(), Duration.ofSeconds(30),
+                new UuidIdGenerator(), events::add);
         var request = new PublishWorkflowRequest(
                 workflowId, 1, "scheduler", "binding", "publish-1",
                 RequestContext.system("request-1", Instant.now()));
@@ -68,6 +71,8 @@ class DefaultWorkflowPublicationServiceTest {
 
         assertEquals(first, duplicate);
         assertEquals("external-daily-orders", first.externalWorkflowId());
+        assertEquals(List.of("workflow.published"),
+                events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     private static WorkflowTaskDefinition task(String key) {

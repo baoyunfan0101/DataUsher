@@ -59,9 +59,10 @@ class DefaultWorkflowRuntimeServiceTest {
                                 "extract", "load", TaskDependencyCondition.ON_SUCCESS)),
                         Optional.empty(), Map.of()), Instant.EPOCH, "system");
         RecordingExecutions executions = new RecordingExecutions();
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var service = new DefaultWorkflowRuntimeService(
                 versions(version), new InMemoryWorkflowRuntimeStore(), executions, executions,
-                new UuidIdGenerator(), new SystemClock());
+                new UuidIdGenerator(), new SystemClock(), events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
 
         var instance = service.trigger(new TriggerWorkflowRequest(
@@ -71,6 +72,8 @@ class DefaultWorkflowRuntimeServiceTest {
         assertEquals(1, executions.submitted.size());
         assertEquals(TaskInstanceState.WAITING,
                 service.listTaskInstances(instance.instanceId()).get(1).state());
+        assertEquals(List.of("workflow.triggered", "workflow.instance-state-changed"),
+                events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
 
         service.handleExecutionStateChanged(completed(executions.submitted.get(0), context));
         service.dispatchReady(instance.instanceId(), context);

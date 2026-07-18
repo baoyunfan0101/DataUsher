@@ -12,6 +12,7 @@ import com.datausher.execution.api.ExecutionStateChangedEvent;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
@@ -26,10 +27,12 @@ import com.datausher.workflow.api.TriggerWorkflowRequest;
 import com.datausher.workflow.api.WorkflowInstance;
 import com.datausher.workflow.api.WorkflowInstanceId;
 import com.datausher.workflow.api.WorkflowInstanceState;
+import com.datausher.workflow.api.WorkflowInstanceStateChangedEvent;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowRuntimeService;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
+import com.datausher.workflow.api.WorkflowTriggeredEvent;
 import com.datausher.workflow.api.WorkflowVersion;
 
 import java.time.Instant;
@@ -50,6 +53,7 @@ public final class DefaultWorkflowRuntimeService
     private final ExecutionQueryService executionQueries;
     private final IdGenerator idGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultWorkflowRuntimeService(
             WorkflowQueryService workflows,
@@ -57,7 +61,8 @@ public final class DefaultWorkflowRuntimeService
             ExecutionCommandService executions,
             ExecutionQueryService executionQueries,
             IdGenerator idGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
         this.store = Objects.requireNonNull(store, "store must not be null");
@@ -65,6 +70,7 @@ public final class DefaultWorkflowRuntimeService
         this.executionQueries = Objects.requireNonNull(executionQueries, "executionQueries must not be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -94,6 +100,10 @@ public final class DefaultWorkflowRuntimeService
                 || !existing.parameters().equals(request.parameters()))) {
             throw new IllegalStateException("workflow idempotency key was used for a different trigger");
         }
+        if (creation.created()) {
+            eventPublisher.publish(new WorkflowTriggeredEvent(
+                    nextId("domain-event"), now, request.requestContext(), existing));
+        }
         return existing;
     }
 
@@ -116,7 +126,7 @@ public final class DefaultWorkflowRuntimeService
                         Optional.empty(), task.failureCode(), now, Optional.empty()) : task)
                 .toList();
         StoredWorkflowRun latest = promoted.equals(current.tasks()) ? current
-                : replaceRun(current, runningInstance(current.instance(), now), promoted);
+                : replaceRun(current, runningInstance(current.instance(), now), promoted, requestContext);
         for (TaskInstance task : List.copyOf(latest.tasks())) {
             if (task.state() != TaskInstanceState.READY) {
                 continue;
@@ -137,7 +147,8 @@ public final class DefaultWorkflowRuntimeService
                     task, TaskInstanceState.QUEUED, task.attempt(), Optional.of(execution.requestId()),
                     Optional.empty(), Optional.empty(), clock.now(), Optional.empty());
             List<TaskInstance> updatedTasks = replaceTask(latest.tasks(), queued);
-            latest = replaceRun(latest, runningInstance(latest.instance(), clock.now()), updatedTasks);
+            latest = replaceRun(
+                    latest, runningInstance(latest.instance(), clock.now()), updatedTasks, requestContext);
         }
         return latest.instance();
     }
@@ -187,7 +198,7 @@ public final class DefaultWorkflowRuntimeService
         List<TaskInstance> tasks = replaceTask(current.tasks(), updatedTask);
         tasks = advanceDependencies(tasks, version, now);
         WorkflowInstance instance = aggregate(current.instance(), tasks, now);
-        replaceRun(current, instance, tasks);
+        replaceRun(current, instance, tasks, event.requestContext());
     }
 
     @Override
@@ -212,6 +223,7 @@ public final class DefaultWorkflowRuntimeService
         WorkflowInstance cancelled = copyInstance(
                 current.instance(), WorkflowInstanceState.CANCELLED, now, Optional.of(now));
         store.update(current, new StoredWorkflowRun(cancelled, tasks, current.requestContext()));
+        publishStateChange(current.instance(), cancelled, request.requestContext(), now);
         for (TaskInstance task : current.tasks()) {
             task.executionRequestId().flatMap(executionQueries::findRequest)
                     .filter(execution -> !execution.state().terminal())
@@ -244,11 +256,25 @@ public final class DefaultWorkflowRuntimeService
     private StoredWorkflowRun replaceRun(
             StoredWorkflowRun current,
             WorkflowInstance instance,
-            List<TaskInstance> tasks
+            List<TaskInstance> tasks,
+            RequestContext requestContext
     ) {
         StoredWorkflowRun replacement = new StoredWorkflowRun(instance, tasks, current.requestContext());
         store.update(current, replacement);
+        publishStateChange(current.instance(), instance, requestContext, instance.updatedAt());
         return replacement;
+    }
+
+    private void publishStateChange(
+            WorkflowInstance previous,
+            WorkflowInstance current,
+            RequestContext requestContext,
+            Instant occurredAt
+    ) {
+        if (previous.state() != current.state()) {
+            eventPublisher.publish(new WorkflowInstanceStateChangedEvent(
+                    nextId("domain-event"), occurredAt, requestContext, previous.state(), current));
+        }
     }
 
     private List<TaskInstance> advanceDependencies(

@@ -12,19 +12,19 @@ public final class InMemoryWorkflowPublicationStore implements WorkflowPublicati
     private final Map<String, String> idempotencyIndex = new HashMap<>();
 
     @Override
-    public synchronized WorkflowPublication createOrFind(WorkflowPublication publication) {
+    public synchronized WorkflowPublicationCreateResult createOrFind(WorkflowPublication publication) {
         String existingKey = idempotencyIndex.get(publication.idempotencyKey());
         if (existingKey != null) {
-            return publications.get(existingKey);
+            return new WorkflowPublicationCreateResult(publications.get(existingKey), false);
         }
         String key = key(publication.workflowId(), publication.version());
         WorkflowPublication existing = publications.get(key);
         if (existing != null) {
-            return existing;
+            return new WorkflowPublicationCreateResult(existing, false);
         }
         publications.put(key, publication);
         idempotencyIndex.put(publication.idempotencyKey(), key);
-        return publication;
+        return new WorkflowPublicationCreateResult(publication, true);
     }
 
     @Override
