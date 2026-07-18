@@ -1,0 +1,24 @@
+# execution-kernel
+
+Stable execution lifecycle boundaries shared by interactive queries, scripts,
+scheduled tasks, profiling, quality checks, and AI-triggered work.
+
+| Project | Use for | Depends on |
+| --- | --- | --- |
+| `execution-core-api` | Execution requests, instances, queues, accounts, logs, results, and explain contracts | `shared-types-api` |
+| `execution-core-core` | Default lifecycle orchestration and storage ports | `execution-core-api`, integration APIs, `shared-types-api` |
+
+## Usage Rules
+
+- Business and library modules depend on `execution-core-api` only.
+- Only an application composition root may depend on `execution-core-core`.
+- Submit an `ExecutionWorkload` for one run; keep reusable task definitions,
+  versions, schedules, and workflow dependencies outside execution-core.
+- Treat workload types and result modes as open values. Unknown values must be
+  preserved by stores and relays.
+- Store adapter IDs and credential binding IDs in execution accounts; never
+  store secret material in execution requests, options, logs, or attributes.
+- Keep platform request and instance IDs separate from external engine job IDs.
+- Dispatch queued work outside the transaction that persists the request.
+- Route all adapter calls through `AdapterInvocationExecutor`.
+- Run `./gradlew verifyModuleBoundaries` after changing project dependencies.
