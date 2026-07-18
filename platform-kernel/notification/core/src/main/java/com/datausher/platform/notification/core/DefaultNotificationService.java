@@ -42,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,6 +53,7 @@ public final class DefaultNotificationService implements NotificationCommandServ
     private final NotificationStore store;
     private final NotificationTemplateRenderer renderer;
     private final Map<NotificationChannel, NotificationChannelProvider> providers;
+    private final ConcurrentMap<String, Object> dispatchLocks = new ConcurrentHashMap<>();
     private final IdGenerator idGenerator;
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
@@ -205,7 +208,22 @@ public final class DefaultNotificationService implements NotificationCommandServ
         return new StoredNotificationDispatch(dispatch, fingerprint, contents);
     }
 
-    private synchronized StoredNotificationDispatch deliverOutstanding(
+    private StoredNotificationDispatch deliverOutstanding(
+            StoredNotificationDispatch initial,
+            RequestContext context
+    ) {
+        String dispatchId = initial.dispatch().dispatchId().value();
+        Object lock = dispatchLocks.computeIfAbsent(dispatchId, ignored -> new Object());
+        try {
+            synchronized (lock) {
+                return deliverOutstandingLocked(initial, context);
+            }
+        } finally {
+            dispatchLocks.remove(dispatchId, lock);
+        }
+    }
+
+    private StoredNotificationDispatch deliverOutstandingLocked(
             StoredNotificationDispatch initial,
             RequestContext context
     ) {
