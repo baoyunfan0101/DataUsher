@@ -38,7 +38,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -135,27 +134,7 @@ public final class DefaultDatasourceService
     ) {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        String searchText = query.text() == null
-                ? null
-                : query.text().toLowerCase(Locale.ROOT);
-        List<DatasourceDefinition> matches = store.list().stream()
-                .filter(definition -> query.adapterId() == null
-                        || definition.adapterId().equals(query.adapterId()))
-                .filter(definition -> query.status() == null
-                        || definition.status() == query.status())
-                .filter(definition -> searchText == null
-                        || definition.datasourceId().value().contains(searchText)
-                        || definition.displayName().toLowerCase(Locale.ROOT).contains(searchText))
-                .sorted(Comparator.comparing(DatasourceDefinition::datasourceId))
-                .toList();
-        int fromIndex = (int) Math.min(pageRequest.offset(), matches.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), matches.size());
-        return new PageResult<>(
-                matches.subList(fromIndex, toIndex),
-                matches.size(),
-                pageRequest.page(),
-                pageRequest.size()
-        );
+        return store.search(query, pageRequest);
     }
 
     @Override

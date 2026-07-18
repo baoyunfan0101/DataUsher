@@ -2,8 +2,10 @@ package com.datausher.data.datasource.core;
 
 import com.datausher.data.datasource.api.DatasourceDefinition;
 import com.datausher.data.datasource.api.DatasourceId;
+import com.datausher.data.datasource.api.DatasourceQuery;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface DatasourceStore {
@@ -13,5 +15,5 @@ public interface DatasourceStore {
 
     Optional<DatasourceDefinition> find(DatasourceId datasourceId);
 
-    List<DatasourceDefinition> list();
+    PageResult<DatasourceDefinition> search(DatasourceQuery query, PageRequest pageRequest);
 }

@@ -5,10 +5,14 @@ import com.datausher.data.metadata.api.CatalogMetadata;
 import com.datausher.data.metadata.api.ColumnMetadata;
 import com.datausher.data.metadata.api.DatabaseMetadata;
 import com.datausher.data.metadata.api.MetadataId;
+import com.datausher.data.metadata.api.MetadataSearchHit;
+import com.datausher.data.metadata.api.MetadataSearchQuery;
 import com.datausher.data.metadata.api.MetadataSyncMode;
 import com.datausher.data.metadata.api.MetadataSyncResult;
 import com.datausher.data.metadata.api.TableMetadata;
 import com.datausher.data.metadata.api.TableSchema;
+import com.datausher.platform.shared.page.PageRequest;
+import com.datausher.platform.shared.page.PageResult;
 
 import java.util.List;
 import java.util.Optional;
@@ -34,11 +38,8 @@ public interface MetadataStore {
 
     List<TableSchema> listSchemaVersions(MetadataId tableId);
 
-    List<CatalogMetadata> listCatalogs();
-
-    List<DatabaseMetadata> listAllDatabases();
-
-    List<TableMetadata> listAllTables();
-
-    List<ColumnMetadata> listAllColumns();
+    PageResult<MetadataSearchHit> search(
+            MetadataSearchQuery query,
+            PageRequest pageRequest
+    );
 }

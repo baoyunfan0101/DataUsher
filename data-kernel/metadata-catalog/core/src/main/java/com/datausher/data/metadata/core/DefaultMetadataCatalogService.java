@@ -150,15 +150,7 @@ public final class DefaultMetadataCatalogService implements
     ) {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(pageRequest, "pageRequest must not be null");
-        List<MetadataSearchHit> matches = searchHits(query);
-        int fromIndex = (int) Math.min(pageRequest.offset(), matches.size());
-        int toIndex = Math.min(fromIndex + pageRequest.size(), matches.size());
-        return new PageResult<>(
-                matches.subList(fromIndex, toIndex),
-                matches.size(),
-                pageRequest.page(),
-                pageRequest.size()
-        );
+        return store.search(query, pageRequest);
     }
 
     private MetadataSyncBatch buildBatch(
@@ -267,128 +259,6 @@ public final class DefaultMetadataCatalogService implements
                 columns,
                 schemas
         );
-    }
-
-    private List<MetadataSearchHit> searchHits(MetadataSearchQuery query) {
-        Map<MetadataId, CatalogMetadata> catalogs = store.listCatalogs().stream()
-                .collect(Collectors.toMap(CatalogMetadata::catalogId, Function.identity()));
-        Map<MetadataId, DatabaseMetadata> databases = store.listAllDatabases().stream()
-                .collect(Collectors.toMap(DatabaseMetadata::databaseId, Function.identity()));
-        Map<MetadataId, TableMetadata> tables = store.listAllTables().stream()
-                .collect(Collectors.toMap(TableMetadata::tableId, Function.identity()));
-        List<MetadataSearchHit> hits = new ArrayList<>();
-
-        if (query.includes(MetadataAssetType.CATALOG)) {
-            catalogs.values().forEach(catalog -> addHit(
-                    hits,
-                    query,
-                    MetadataAssetType.CATALOG,
-                    catalog.catalogId(),
-                    catalog.datasourceId(),
-                    catalog.name(),
-                    catalog.name(),
-                    "",
-                    catalog.attributes()
-            ));
-        }
-        if (query.includes(MetadataAssetType.DATABASE)) {
-            databases.values().forEach(database -> {
-                CatalogMetadata catalog = catalogs.get(database.catalogId());
-                if (catalog != null) {
-                    addHit(hits, query, MetadataAssetType.DATABASE, database.databaseId(),
-                            catalog.datasourceId(), database.name(), database.qualifiedName(), "",
-                            database.attributes());
-                }
-            });
-        }
-        if (query.includes(MetadataAssetType.TABLE)) {
-            tables.values().forEach(table -> {
-                DatasourceId datasourceId = datasourceId(table.databaseId(), databases, catalogs);
-                if (datasourceId != null) {
-                    addHit(hits, query, MetadataAssetType.TABLE, table.tableId(), datasourceId,
-                            table.name(), table.qualifiedName(), table.description(), table.attributes());
-                }
-            });
-        }
-        if (query.includes(MetadataAssetType.COLUMN)) {
-            store.listAllColumns().forEach(column -> {
-                TableMetadata table = tables.get(column.tableId());
-                DatasourceId datasourceId = table == null
-                        ? null
-                        : datasourceId(table.databaseId(), databases, catalogs);
-                if (datasourceId != null) {
-                    addHit(hits, query, MetadataAssetType.COLUMN, column.columnId(), datasourceId,
-                            column.name(), column.qualifiedName(), column.description(),
-                            column.attributes());
-                }
-            });
-        }
-        return hits.stream()
-                .sorted(Comparator.comparingDouble(MetadataSearchHit::score).reversed()
-                        .thenComparing(MetadataSearchHit::qualifiedName)
-                        .thenComparing(MetadataSearchHit::type)
-                        .thenComparing(MetadataSearchHit::assetId))
-                .toList();
-    }
-
-    private static void addHit(
-            List<MetadataSearchHit> hits,
-            MetadataSearchQuery query,
-            MetadataAssetType type,
-            MetadataId assetId,
-            DatasourceId datasourceId,
-            String name,
-            String qualifiedName,
-            String description,
-            Map<String, String> attributes
-    ) {
-        if (query.datasourceId() != null && !query.datasourceId().equals(datasourceId)) {
-            return;
-        }
-        double score = score(query.text(), name, qualifiedName, description);
-        if (score > 0) {
-            hits.add(new MetadataSearchHit(
-                    type, assetId, datasourceId, name, qualifiedName,
-                    description, score, attributes));
-        }
-    }
-
-    private static double score(
-            String query,
-            String name,
-            String qualifiedName,
-            String description
-    ) {
-        String term = query.toLowerCase(Locale.ROOT);
-        String normalizedName = name.toLowerCase(Locale.ROOT);
-        String normalizedQualifiedName = qualifiedName.toLowerCase(Locale.ROOT);
-        String normalizedDescription = description.toLowerCase(Locale.ROOT);
-        if (normalizedName.equals(term)) {
-            return 100;
-        }
-        if (normalizedName.startsWith(term)) {
-            return 80;
-        }
-        if (normalizedName.contains(term)) {
-            return 60;
-        }
-        if (normalizedQualifiedName.contains(term)) {
-            return 40;
-        }
-        if (normalizedDescription.contains(term)) {
-            return 20;
-        }
-        return 0;
-    }
-
-    private static DatasourceId datasourceId(
-            MetadataId databaseId,
-            Map<MetadataId, DatabaseMetadata> databases,
-            Map<MetadataId, CatalogMetadata> catalogs
-    ) {
-        DatabaseMetadata database = databases.get(databaseId);
-        CatalogMetadata catalog = database == null ? null : catalogs.get(database.catalogId());
-        return catalog == null ? null : catalog.datasourceId();
     }
 
     private static List<DiscoveredDatasourceObject> objects(
