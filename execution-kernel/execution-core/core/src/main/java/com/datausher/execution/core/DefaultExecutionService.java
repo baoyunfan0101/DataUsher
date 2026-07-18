@@ -5,8 +5,6 @@ import com.datausher.execution.api.ExecutionAccount;
 import com.datausher.execution.api.ExecutionAccountStatus;
 import com.datausher.execution.api.ExecutionCommandService;
 import com.datausher.execution.api.ExecutionEvents;
-import com.datausher.execution.api.ExecutionExplainPlan;
-import com.datausher.execution.api.ExecutionExplainService;
 import com.datausher.execution.api.ExecutionFailure;
 import com.datausher.execution.api.ExecutionInstance;
 import com.datausher.execution.api.ExecutionInstanceId;
@@ -25,8 +23,6 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionResultPage;
 import com.datausher.execution.api.ExecutionResultQueryService;
 import com.datausher.execution.api.ExecutionState;
-import com.datausher.execution.api.ExecutionWorkloadType;
-import com.datausher.execution.api.ExplainExecutionRequest;
 import com.datausher.execution.api.ReadExecutionLogRequest;
 import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
@@ -38,9 +34,6 @@ import com.datausher.integration.compute.api.ComputeJobRequest;
 import com.datausher.integration.compute.api.ComputeJobResultPage;
 import com.datausher.integration.compute.api.ComputeJobState;
 import com.datausher.integration.compute.api.ComputeJobStatus;
-import com.datausher.integration.compute.api.SqlEngineAdapter;
-import com.datausher.integration.compute.api.SqlExecutionRequest;
-import com.datausher.integration.compute.api.SqlExplainPlan;
 import com.datausher.integration.runtime.api.AdapterInvocationExecutor;
 import com.datausher.integration.runtime.api.AdapterRegistry;
 import com.datausher.integration.runtime.api.AdapterRequestContext;
@@ -65,7 +58,7 @@ import java.util.stream.Collectors;
 
 public final class DefaultExecutionService
         implements ExecutionCommandService, ExecutionQueryService, ExecutionLogQueryService,
-        ExecutionResultQueryService, ExecutionExplainService, ExecutionWorker {
+        ExecutionResultQueryService, ExecutionWorker {
     private static final String SOURCE_MODULE = "execution-core";
 
     private final ExecutionStore executionStore;
@@ -364,41 +357,6 @@ public final class DefaultExecutionService
                 page.resultReference(),
                 page.attributes()
         );
-    }
-
-    @Override
-    public ExecutionExplainPlan explain(ExplainExecutionRequest request) {
-        Objects.requireNonNull(request, "request must not be null");
-        if (!request.workload().type().equals(ExecutionWorkloadType.SQL)) {
-            throw new IllegalArgumentException("explain currently requires an SQL workload");
-        }
-        ExecutionAccount account = requireActiveAccount(request.accountId());
-        requireSupportedWorkload(account, request.workload().type());
-        SqlEngineAdapter adapter = adapterRegistry.find(
-                account.adapterId(), SqlEngineAdapter.class).orElseThrow(() ->
-                new IllegalStateException(
-                        "SQL compute adapter is not registered: " + account.adapterId()));
-        requireCapability(adapter, ComputeCapabilities.SQL_EXPLAIN);
-        AdapterRequestContext adapterContext = adapterContext(request.requestContext());
-        SqlExplainPlan plan = invocationExecutor.execute(
-                adapterContext,
-                adapter,
-                "explain",
-                () -> adapter.explain(adapterContext, new SqlExecutionRequest(
-                        account.credentialBindingId(),
-                        request.workload().payload(),
-                        request.workload().parameters().entrySet().stream()
-                                .collect(Collectors.toUnmodifiableMap(
-                                        Map.Entry::getKey,
-                                        entry -> ExecutionValueMapper.toIntegration(
-                                                entry.getValue())
-                                )),
-                        1,
-                        request.workload().options()
-                ))
-        );
-        Objects.requireNonNull(plan, "SQL compute adapter returned a null explain plan");
-        return new ExecutionExplainPlan(plan.format(), plan.content(), plan.attributes());
     }
 
     private ExecutionInstance failDispatch(

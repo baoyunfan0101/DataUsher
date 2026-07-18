@@ -10,7 +10,6 @@ import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionValue;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
-import com.datausher.execution.api.ExplainExecutionRequest;
 import com.datausher.execution.api.ReadExecutionLogRequest;
 import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.RegisterExecutionAccountRequest;
@@ -25,9 +24,6 @@ import com.datausher.integration.compute.api.ComputeJobResultPage;
 import com.datausher.integration.compute.api.ComputeJobState;
 import com.datausher.integration.compute.api.ComputeJobStatus;
 import com.datausher.integration.compute.api.ComputeResultColumn;
-import com.datausher.integration.compute.api.SqlEngineAdapter;
-import com.datausher.integration.compute.api.SqlExecutionRequest;
-import com.datausher.integration.compute.api.SqlExplainPlan;
 import com.datausher.integration.runtime.api.AdapterCapability;
 import com.datausher.integration.runtime.api.AdapterDescriptor;
 import com.datausher.integration.runtime.api.AdapterHealth;
@@ -104,7 +100,7 @@ class DefaultExecutionServiceTest {
     }
 
     @Test
-    void exposesPortableLogsResultsAndSqlExplain() {
+    void exposesPortableLogsAndResults() {
         Fixture fixture = new Fixture(1);
         fixture.service.submit(fixture.submission("select 1 as value"));
         var instance = fixture.service.dispatchNext(
@@ -114,15 +110,9 @@ class DefaultExecutionServiceTest {
                 instance.instanceId(), -1, 10, fixture.context));
         var result = fixture.service.read(new ReadExecutionResultRequest(
                 instance.instanceId(), 0, 10, fixture.context));
-        var plan = fixture.service.explain(new ExplainExecutionRequest(
-                fixture.accountId,
-                new ExecutionWorkload(
-                        ExecutionWorkloadType.SQL, "select 1", Map.of(), Map.of()),
-                fixture.context));
 
         assertEquals("completed", logs.entries().getFirst().message());
         assertEquals(new ExecutionValue.DecimalValue(1), result.rows().getFirst().getFirst());
-        assertEquals("scan constants", plan.content());
     }
 
     private static final class Fixture {
@@ -164,7 +154,7 @@ class DefaultExecutionServiceTest {
                     queueId,
                     accountId,
                     new ExecutionWorkload(
-                            ExecutionWorkloadType.SQL,
+                            new ExecutionWorkloadType("fixture"),
                             payload,
                             Map.of("limit", new ExecutionValue.DecimalValue(1)),
                             Map.of()
@@ -188,7 +178,7 @@ class DefaultExecutionServiceTest {
         }
     }
 
-    private static final class LifecycleAdapter implements SqlEngineAdapter {
+    private static final class LifecycleAdapter implements ComputeEngineAdapter {
         private static final AdapterDescriptor DESCRIPTOR = new AdapterDescriptor(
                 "lifecycle-fixture",
                 AdapterType.COMPUTE_ENGINE,
@@ -197,9 +187,7 @@ class DefaultExecutionServiceTest {
                         AdapterCapability.of(ComputeCapabilities.JOB_EXECUTION),
                         AdapterCapability.of(ComputeCapabilities.JOB_CANCELLATION),
                         AdapterCapability.of(ComputeCapabilities.JOB_LOGS),
-                        AdapterCapability.of(ComputeCapabilities.JOB_RESULTS),
-                        AdapterCapability.of(ComputeCapabilities.SQL_EXECUTION),
-                        AdapterCapability.of(ComputeCapabilities.SQL_EXPLAIN)
+                        AdapterCapability.of(ComputeCapabilities.JOB_RESULTS)
                 ),
                 Map.of()
         );
@@ -263,14 +251,6 @@ class DefaultExecutionServiceTest {
                     "",
                     Map.of()
             );
-        }
-
-        @Override
-        public SqlExplainPlan explain(
-                AdapterRequestContext context,
-                SqlExecutionRequest request
-        ) {
-            return new SqlExplainPlan("text", "scan constants", Map.of());
         }
 
         @Override

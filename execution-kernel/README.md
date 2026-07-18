@@ -5,8 +5,10 @@ scheduled tasks, profiling, quality checks, and AI-triggered work.
 
 | Project | Use for | Depends on |
 | --- | --- | --- |
-| `execution-core-api` | Execution requests, instances, queues, accounts, logs, results, and explain contracts | `shared-types-api` |
+| `execution-core-api` | Execution requests, instances, queues, accounts, logs, and results | `shared-types-api` |
 | `execution-core-core` | Default lifecycle orchestration and storage ports | `execution-core-api`, integration APIs, `shared-types-api` |
+| `execution-sql-api` | SQL workload and explain contracts | `execution-core-api`, `shared-types-api` |
+| `execution-sql-core` | SQL explain orchestration through typed compute adapters | execution and integration APIs |
 
 ## Usage Rules
 
@@ -19,6 +21,8 @@ scheduled tasks, profiling, quality checks, and AI-triggered work.
 - Store adapter IDs and credential binding IDs in execution accounts; never
   store secret material in execution requests, options, logs, or attributes.
 - Keep platform request and instance IDs separate from external engine job IDs.
+- Keep language-specific workload factories and operations in focused extension
+  projects such as `execution-sql`; execution-core must remain language-neutral.
 - Dispatch queued work outside the transaction that persists the request.
 - Route all adapter calls through `AdapterInvocationExecutor`.
 - Run `./gradlew verifyModuleBoundaries` after changing project dependencies.

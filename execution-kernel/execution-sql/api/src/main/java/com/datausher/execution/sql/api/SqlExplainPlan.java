@@ -1,14 +1,14 @@
-package com.datausher.execution.api;
+package com.datausher.execution.sql.api;
 
 import java.util.Map;
 import java.util.Objects;
 
-public record ExecutionExplainPlan(
+public record SqlExplainPlan(
         String format,
         String content,
         Map<String, String> attributes
 ) {
-    public ExecutionExplainPlan {
+    public SqlExplainPlan {
         format = Objects.requireNonNull(format, "format must not be null").trim();
         content = Objects.requireNonNull(content, "content must not be null").trim();
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);

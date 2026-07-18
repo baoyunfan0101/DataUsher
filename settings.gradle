@@ -44,6 +44,8 @@ include(
     "data-kernel:metadata-catalog-core",
     "execution-kernel:execution-core-api",
     "execution-kernel:execution-core-core",
+    "execution-kernel:execution-sql-api",
+    "execution-kernel:execution-sql-core",
     "adapters:datasource-mysql",
     "adapters:compute-local-sql",
     "datausher-app"
@@ -107,6 +109,10 @@ project(":execution-kernel:execution-core-api").projectDir =
         file("execution-kernel/execution-core/api")
 project(":execution-kernel:execution-core-core").projectDir =
         file("execution-kernel/execution-core/core")
+project(":execution-kernel:execution-sql-api").projectDir =
+        file("execution-kernel/execution-sql/api")
+project(":execution-kernel:execution-sql-core").projectDir =
+        file("execution-kernel/execution-sql/core")
 project(":adapters:datasource-mysql").projectDir =
         file("adapters/datasource-mysql")
 project(":adapters:compute-local-sql").projectDir =

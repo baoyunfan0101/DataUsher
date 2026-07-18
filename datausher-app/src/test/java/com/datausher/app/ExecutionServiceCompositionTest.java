@@ -5,9 +5,6 @@ import com.datausher.execution.api.ExecutionAccountId;
 import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionValue;
-import com.datausher.execution.api.ExecutionWorkload;
-import com.datausher.execution.api.ExecutionWorkloadType;
-import com.datausher.execution.api.ExplainExecutionRequest;
 import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.RegisterExecutionAccountRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
@@ -16,6 +13,9 @@ import com.datausher.execution.core.DefaultExecutionService;
 import com.datausher.execution.core.InMemoryExecutionAccountStore;
 import com.datausher.execution.core.InMemoryExecutionQueueStore;
 import com.datausher.execution.core.InMemoryExecutionStore;
+import com.datausher.execution.sql.api.SqlExplainRequest;
+import com.datausher.execution.sql.api.SqlWorkloads;
+import com.datausher.execution.sql.core.DefaultSqlExplainService;
 import com.datausher.integration.compute.local.LocalSqlEngineAdapter;
 import com.datausher.integration.runtime.core.DeadlineEnforcingAdapterInvocationExecutor;
 import com.datausher.integration.runtime.core.DefaultIntegrationErrorMapper;
@@ -57,27 +57,29 @@ class ExecutionServiceCompositionTest {
                     "Local SQL",
                     adapter.descriptor().adapterId(),
                     "local-binding",
-                    Set.of(ExecutionWorkloadType.SQL),
+                    Set.of(SqlWorkloads.TYPE),
                     Map.of(),
                     context
             ));
             var registry = new InMemoryAdapterRegistry();
             registry.register(adapter);
+            var invocationExecutor = new DeadlineEnforcingAdapterInvocationExecutor(
+                    invocationThreads, java.time.Clock.systemUTC());
             var service = new DefaultExecutionService(
                     new InMemoryExecutionStore(),
                     queueStore,
                     accountStore,
                     registry,
-                    new DeadlineEnforcingAdapterInvocationExecutor(
-                            invocationThreads, java.time.Clock.systemUTC()),
+                    invocationExecutor,
                     new DefaultIntegrationErrorMapper(),
                     clock,
                     new UuidIdGenerator(),
                     event -> { },
                     Duration.ofSeconds(30)
             );
-            var workload = new ExecutionWorkload(
-                    ExecutionWorkloadType.SQL,
+            var sqlExplainService = new DefaultSqlExplainService(
+                    control, registry, invocationExecutor, clock, Duration.ofSeconds(30));
+            var workload = SqlWorkloads.statement(
                     "select x as result_value from system_range(1, 3) order by x",
                     Map.of(),
                     Map.of("maxRows", "100")
@@ -90,8 +92,9 @@ class ExecutionServiceCompositionTest {
             instance = awaitTerminal(service, instance, context);
             var result = service.read(new ReadExecutionResultRequest(
                     instance.instanceId(), 0, 2, context));
-            var plan = service.explain(new ExplainExecutionRequest(
-                    account.accountId(), workload, context));
+            var plan = sqlExplainService.explain(new SqlExplainRequest(
+                    account.accountId(), workload.payload(), workload.parameters(),
+                    workload.options(), context));
 
             assertEquals(ExecutionState.SUCCEEDED, instance.state());
             assertEquals(new ExecutionValue.DecimalValue(1),

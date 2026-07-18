@@ -28,8 +28,6 @@ calls `ExecutionWorker.refresh` until the instance reaches a terminal state.
 - `ExecutionQueryService` queries requests and instances.
 - `ExecutionLogQueryService` reads logs with a resumable sequence cursor.
 - `ExecutionResultQueryService` reads typed, paged results or result references.
-- `ExecutionExplainService` requests an explain plan when the selected adapter
-  declares the required capability.
 - Queue and account command/query services manage concurrency boundaries and
   adapter bindings.
 
@@ -42,9 +40,7 @@ calls `ExecutionWorker.refresh` until the instance reaches a terminal state.
 - Use `PAGED` for row results, `REFERENCE` for externally materialized output,
   and `DISCARD` when callers must not read a result. Custom result modes remain
   valid contract values.
-- Use positional parameter names (`1`, `2`, and so on) only when required by a
-  concrete adapter. Other adapters may define additional parameter conventions.
 - Storage implementations must create and claim requests atomically, enforce
   queue concurrency, apply revision checks, and honor query paging.
-- Do not expose vendor status objects, SDK handles, SQL exceptions, or raw
+- Do not expose vendor status objects, SDK handles, vendor exceptions, or raw
   credentials through execution-core APIs.

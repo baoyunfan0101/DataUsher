@@ -38,7 +38,7 @@ class DefaultExecutionControlServiceTest {
                 new ExecutionQueueId("batch"), "Batch", 4, 10, Map.of(), context));
         var account = service.register(new RegisterExecutionAccountRequest(
                 new ExecutionAccountId("local"), "Local", "local-compute", "local-binding",
-                Set.of(ExecutionWorkloadType.SQL), Map.of(), context));
+                Set.of(new ExecutionWorkloadType("fixture")), Map.of(), context));
 
         clock.advance();
         var disabledQueue = service.changeStatus(new ChangeExecutionQueueStatusRequest(

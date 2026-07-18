@@ -4,9 +4,6 @@ import java.util.Locale;
 import java.util.Objects;
 
 public record ExecutionWorkloadType(String value) implements Comparable<ExecutionWorkloadType> {
-    public static final ExecutionWorkloadType SQL = new ExecutionWorkloadType("sql");
-    public static final ExecutionWorkloadType SCRIPT = new ExecutionWorkloadType("script");
-
     public ExecutionWorkloadType {
         value = Objects.requireNonNull(value, "value must not be null")
                 .trim()
