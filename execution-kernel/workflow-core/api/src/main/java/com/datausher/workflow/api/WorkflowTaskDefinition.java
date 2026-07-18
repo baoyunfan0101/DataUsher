@@ -3,6 +3,7 @@ package com.datausher.workflow.api;
 import com.datausher.execution.api.ExecutionSpecification;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -28,7 +29,8 @@ public record WorkflowTaskDefinition(
     }
 
     static String normalizeKey(String value) {
-        String normalized = Objects.requireNonNull(value, "taskKey must not be null").trim().toLowerCase();
+        String normalized = Objects.requireNonNull(value, "taskKey must not be null")
+                .trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("[a-z][a-z0-9.-]{0,126}")) {
             throw new IllegalArgumentException("taskKey must match [a-z][a-z0-9.-]{0,126}");
         }

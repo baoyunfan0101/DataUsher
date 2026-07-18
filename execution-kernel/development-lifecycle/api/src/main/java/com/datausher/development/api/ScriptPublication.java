@@ -4,6 +4,7 @@ import com.datausher.governance.approval.api.ApprovalRequestId;
 import com.datausher.workflow.api.WorkflowId;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -34,7 +35,7 @@ public record ScriptPublication(
         publishedWorkflowVersion = publishedWorkflowVersion == null
                 ? Optional.empty() : publishedWorkflowVersion;
         conflictCode = conflictCode == null ? Optional.empty()
-                : conflictCode.map(value -> value.trim().toLowerCase());
+                : conflictCode.map(value -> value.trim().toLowerCase(Locale.ROOT));
         createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         if (scriptVersion < 1 || baseWorkflowVersion < 1 || idempotencyKey.isEmpty() || revision < 1) {
@@ -58,7 +59,8 @@ public record ScriptPublication(
     }
 
     private static String normalizeTaskKey(String value) {
-        String normalized = Objects.requireNonNull(value, "taskKey must not be null").trim().toLowerCase();
+        String normalized = Objects.requireNonNull(value, "taskKey must not be null")
+                .trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("[a-z][a-z0-9.-]{0,126}")) {
             throw new IllegalArgumentException("taskKey contains unsupported characters");
         }

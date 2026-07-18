@@ -6,6 +6,7 @@ import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.workflow.api.WorkflowId;
 
 import java.util.Map;
+import java.util.Locale;
 import java.util.Objects;
 
 public record RequestScriptPublication(
@@ -23,7 +24,8 @@ public record RequestScriptPublication(
     public RequestScriptPublication {
         scriptId = Objects.requireNonNull(scriptId, "scriptId must not be null");
         workflowId = Objects.requireNonNull(workflowId, "workflowId must not be null");
-        taskKey = Objects.requireNonNull(taskKey, "taskKey must not be null").trim().toLowerCase();
+        taskKey = Objects.requireNonNull(taskKey, "taskKey must not be null")
+                .trim().toLowerCase(Locale.ROOT);
         approvalTemplateKey = Objects.requireNonNull(
                 approvalTemplateKey, "approvalTemplateKey must not be null");
         requestedBy = Objects.requireNonNull(requestedBy, "requestedBy must not be null");
