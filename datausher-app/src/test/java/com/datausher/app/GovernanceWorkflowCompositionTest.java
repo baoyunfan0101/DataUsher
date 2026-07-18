@@ -57,6 +57,7 @@ import com.datausher.platform.notification.core.InMemoryNotificationStore;
 import com.datausher.platform.notification.core.StrictNotificationTemplateRenderer;
 import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.context.ActorContext;
+import com.datausher.platform.shared.event.core.NoopDomainEventPublisher;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.time.core.SystemClock;
 import org.junit.jupiter.api.Test;
@@ -76,13 +77,14 @@ class GovernanceWorkflowCompositionTest {
         var clock = new SystemClock();
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
         var auditedCommands = new CompensatingAuditedCommandExecutor(audit);
+        var events = new NoopDomainEventPublisher();
         var resources = new DefaultResourceRegistryService(
                 new InMemoryResourceStore(), clock, auditedCommands, scope -> {
                 });
         var subjectStore = new InMemorySubjectStore();
         var identities = new DefaultIdentityQueryService(subjectStore);
         var ownership = new DefaultOwnershipService(
-                new InMemoryOwnershipStore(), resources, identities, clock, auditedCommands);
+                new InMemoryOwnershipStore(), resources, identities, ids, clock, auditedCommands, events);
         var delivered = new AtomicReference<NotificationEnvelope>();
         NotificationChannel channel = new NotificationChannel("recording");
         NotificationChannelProvider provider = new NotificationChannelProvider() {
@@ -106,7 +108,7 @@ class GovernanceWorkflowCompositionTest {
                 new InMemoryApprovalStore(), resources, identities,
                 new AuthenticatedSubjectDecisionAuthorizer(),
                 List.of(new DirectSubjectApproverResolver(), new ResourceOwnerApproverResolver(ownership)),
-                ids, clock, auditedCommands, callbacks);
+                ids, clock, auditedCommands, events, callbacks);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         SubjectRef owner = new SubjectRef(SubjectType.USER, "owner-1");
         subjectStore.save(new Subject(owner, "Owner", SubjectStatus.ACTIVE, Map.of()));

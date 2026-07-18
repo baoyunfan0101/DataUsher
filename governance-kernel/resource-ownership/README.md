@@ -11,4 +11,6 @@ registered `ResourceRef`. `resource-ownership-core` provides the default service
 - Use `OwnershipRole` values to distinguish responsibilities without changing the API.
 - Use `listOwners` for normal resource-level lookup and `search` for paged queries.
 - Treat a resource, subject, and role tuple as one owner assignment.
+- Subscribe to typed ownership events instead of inferring changes from storage records.
+- Configure a durable `DomainEventPublisher` when ownership events must survive process failure.
 - Pass the caller's `RequestContext` to owner commands.

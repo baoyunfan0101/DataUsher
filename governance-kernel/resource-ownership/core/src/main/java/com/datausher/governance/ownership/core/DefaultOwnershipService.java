@@ -9,6 +9,8 @@ import com.datausher.governance.ownership.api.OwnershipQuery;
 import com.datausher.governance.ownership.api.OwnershipQueryService;
 import com.datausher.governance.ownership.api.RemoveResourceOwnerRequest;
 import com.datausher.governance.ownership.api.ResourceOwner;
+import com.datausher.governance.ownership.api.ResourceOwnerAssignedEvent;
+import com.datausher.governance.ownership.api.ResourceOwnerRemovedEvent;
 import com.datausher.governance.resource.api.RegisteredResource;
 import com.datausher.governance.resource.api.ResourceLifecycle;
 import com.datausher.governance.resource.api.ResourceQueryService;
@@ -18,6 +20,9 @@ import com.datausher.platform.audit.api.AuditRecordRequest;
 import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
 import com.datausher.platform.shared.time.Clock;
@@ -31,21 +36,27 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
     private final OwnershipStore store;
     private final ResourceQueryService resources;
     private final IdentityQueryService identities;
+    private final IdGenerator idGenerator;
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultOwnershipService(
             OwnershipStore store,
             ResourceQueryService resources,
             IdentityQueryService identities,
+            IdGenerator idGenerator,
             Clock clock,
-            AuditedCommandExecutor commandExecutor
+            AuditedCommandExecutor commandExecutor,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.resources = Objects.requireNonNull(resources, "resources must not be null");
         this.identities = Objects.requireNonNull(identities, "identities must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -62,7 +73,7 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
                 request.requestContext().actor().actorId(),
                 request.attributes()
         );
-        return commandExecutor.execute(new AuditedCommand<>() {
+        ResourceOwner saved = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ResourceOwner execute() {
                 store.replace(previous, Optional.of(owner));
@@ -84,6 +95,9 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
                 store.replace(Optional.of(owner), previous);
             }
         });
+        eventPublisher.publish(new ResourceOwnerAssignedEvent(
+                nextEventId(), clock.now(), request.requestContext(), saved));
+        return saved;
     }
 
     @Override
@@ -91,7 +105,7 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
         Objects.requireNonNull(request, "request must not be null");
         ResourceOwner current = store.find(request.resourceRef(), request.subjectRef(), request.role())
                 .orElseThrow(() -> new IllegalArgumentException("resource owner does not exist"));
-        commandExecutor.execute(new AuditedCommand<ResourceOwner>() {
+        ResourceOwner removed = commandExecutor.execute(new AuditedCommand<ResourceOwner>() {
             @Override
             public ResourceOwner execute() {
                 store.replace(Optional.of(current), Optional.empty());
@@ -113,6 +127,8 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
                 store.replace(Optional.empty(), Optional.of(current));
             }
         });
+        eventPublisher.publish(new ResourceOwnerRemovedEvent(
+                nextEventId(), clock.now(), request.requestContext(), removed));
     }
 
     @Override
@@ -160,6 +176,10 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
             throw new IllegalStateException(
                     "subject is not active: " + request.subjectRef().canonicalValue());
         }
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(IdGenerationRequest.of("governance", "ownership-event"));
     }
 
     private static AuditRecordRequest auditRequest(

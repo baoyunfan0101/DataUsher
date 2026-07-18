@@ -8,6 +8,7 @@ import com.datausher.platform.audit.core.DefaultAuditService;
 import com.datausher.platform.audit.core.InMemoryAuditEventStore;
 import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.context.ActorContext;
+import com.datausher.platform.shared.event.DomainEvent;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
@@ -15,6 +16,7 @@ import com.datausher.platform.shared.time.core.SystemClock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,7 +32,9 @@ class DefaultApprovalServiceTest {
         SubjectRef requester = new SubjectRef(SubjectType.USER, "requester");
         SubjectRef reviewer = new SubjectRef(SubjectType.USER, "reviewer");
         SubjectRef operator = new SubjectRef(SubjectType.USER, "operator");
-        DefaultApprovalService service = service(target, List.of(requester, reviewer, operator));
+        List<DomainEvent> events = new ArrayList<>();
+        DefaultApprovalService service = service(
+                target, List.of(requester, reviewer, operator), events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         ApprovalTemplateKey key = new ApprovalTemplateKey("workflow-publish");
 
@@ -68,6 +72,8 @@ class DefaultApprovalServiceTest {
                 contextFor(operator, "decision-2")));
         assertEquals(ApprovalRequestStatus.APPROVED, request.status());
         assertEquals(1, request.templateVersion());
+        assertEquals(ApprovalRequestedEvent.class, events.get(0).getClass());
+        assertEquals(ApprovalCompletedEvent.class, events.get(1).getClass());
     }
 
     @Test
@@ -117,6 +123,15 @@ class DefaultApprovalServiceTest {
     }
 
     private static DefaultApprovalService service(ResourceRef target, List<SubjectRef> subjects) {
+        return service(target, subjects, event -> {
+        });
+    }
+
+    private static DefaultApprovalService service(
+            ResourceRef target,
+            List<SubjectRef> subjects,
+            com.datausher.platform.shared.event.DomainEventPublisher eventPublisher
+    ) {
         var clock = new SystemClock();
         var ids = new UuidIdGenerator();
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
@@ -124,7 +139,7 @@ class DefaultApprovalServiceTest {
                 new InMemoryApprovalStore(), resources(target), identities(subjects),
                 new AuthenticatedSubjectDecisionAuthorizer(),
                 List.of(new DirectSubjectApproverResolver()), ids, clock,
-                new CompensatingAuditedCommandExecutor(audit), ApprovalTerminalHandler.noop());
+                new CompensatingAuditedCommandExecutor(audit), eventPublisher, ApprovalTerminalHandler.noop());
     }
 
     private static RequestContext contextFor(SubjectRef subjectRef, String requestId) {

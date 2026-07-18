@@ -9,6 +9,8 @@ import com.datausher.governance.access.api.SubjectType;
 import com.datausher.governance.ownership.api.AssignResourceOwnerRequest;
 import com.datausher.governance.ownership.api.OwnershipRole;
 import com.datausher.governance.ownership.api.RemoveResourceOwnerRequest;
+import com.datausher.governance.ownership.api.ResourceOwnerAssignedEvent;
+import com.datausher.governance.ownership.api.ResourceOwnerRemovedEvent;
 import com.datausher.governance.resource.api.RegisteredResource;
 import com.datausher.governance.resource.api.ResourceLifecycle;
 import com.datausher.governance.resource.api.ResourceQuery;
@@ -19,6 +21,7 @@ import com.datausher.platform.audit.core.CompensatingAuditedCommandExecutor;
 import com.datausher.platform.audit.core.DefaultAuditService;
 import com.datausher.platform.audit.core.InMemoryAuditEventStore;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEvent;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
@@ -26,6 +29,8 @@ import com.datausher.platform.shared.time.core.SystemClock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -39,13 +44,17 @@ class DefaultOwnershipServiceTest {
         ResourceRef resourceRef = ResourceRef.global("table", "orders");
         SubjectRef subjectRef = new SubjectRef(SubjectType.USER, "owner-1");
         var clock = new SystemClock();
-        var audit = new DefaultAuditService(new InMemoryAuditEventStore(), new UuidIdGenerator(), clock);
+        var ids = new UuidIdGenerator();
+        var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
+        List<DomainEvent> events = new ArrayList<>();
         var service = new DefaultOwnershipService(
                 new InMemoryOwnershipStore(),
                 resources(resourceRef),
                 identities(subjectRef),
+                ids,
                 clock,
-                new CompensatingAuditedCommandExecutor(audit)
+                new CompensatingAuditedCommandExecutor(audit),
+                events::add
         );
         RequestContext context = RequestContext.system("request-1", Instant.now());
 
@@ -58,6 +67,8 @@ class DefaultOwnershipServiceTest {
                 resourceRef, subjectRef, new OwnershipRole("data-steward"), context));
 
         assertTrue(service.listOwners(resourceRef).isEmpty());
+        assertEquals(ResourceOwnerAssignedEvent.class, events.get(0).getClass());
+        assertEquals(ResourceOwnerRemovedEvent.class, events.get(1).getClass());
     }
 
     @Test
@@ -77,13 +88,17 @@ class DefaultOwnershipServiceTest {
             store.replace(Optional.empty(), Optional.of(owner));
         });
         var clock = new SystemClock();
-        var audit = new DefaultAuditService(new InMemoryAuditEventStore(), new UuidIdGenerator(), clock);
+        var ids = new UuidIdGenerator();
+        var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
         var service = new DefaultOwnershipService(
                 store,
                 resources(resourceRef),
                 identities(new SubjectRef(SubjectType.USER, "unused")),
+                ids,
                 clock,
-                new CompensatingAuditedCommandExecutor(audit)
+                new CompensatingAuditedCommandExecutor(audit),
+                event -> {
+                }
         );
 
         assertEquals(1001, service.listOwners(resourceRef).size());

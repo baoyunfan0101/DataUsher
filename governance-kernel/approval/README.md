@@ -18,4 +18,6 @@ default lifecycle services.
 - Register callback handlers before requests of that callback type reach terminal callback delivery.
 - Make callback handlers idempotent by `ApprovalRequestId` and use the correlation key for business lookup.
 - Query callback delivery state and retry failed deliveries through `ApprovalCallbackDeliveryService`.
+- Subscribe to typed approval events instead of inferring lifecycle changes from storage records.
+- Configure a durable `DomainEventPublisher` when approval events must survive process failure.
 - Pass the caller's `RequestContext` to template, request, decision, cancel, and retry commands.

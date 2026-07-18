@@ -9,6 +9,7 @@ import com.datausher.governance.resource.api.ResourceLifecycle;
 import com.datausher.governance.resource.api.ResourceQueryService;
 import com.datausher.platform.audit.api.*;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
@@ -28,6 +29,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     private final IdGenerator idGenerator;
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
+    private final DomainEventPublisher eventPublisher;
     private final ApprovalTerminalHandler terminalHandler;
 
     public DefaultApprovalService(
@@ -39,6 +41,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
             IdGenerator idGenerator,
             Clock clock,
             AuditedCommandExecutor commandExecutor,
+            DomainEventPublisher eventPublisher,
             ApprovalTerminalHandler terminalHandler
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
@@ -50,6 +53,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.terminalHandler = Objects.requireNonNull(terminalHandler, "terminalHandler must not be null");
     }
 
@@ -106,7 +110,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
                 template.templateKey(), template.version(), template.purpose(), request.title(),
                 request.targetResource(), request.requestedBy(), ApprovalRequestStatus.PENDING,
                 steps, request.callback(), request.idempotencyKey(), clock.now(), null, request.attributes());
-        return commandExecutor.execute(new AuditedCommand<>() {
+        ApprovalRequest saved = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ApprovalRequest execute() {
                 store.createRequest(approval);
@@ -123,6 +127,9 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
                 store.deleteRequest(result);
             }
         });
+        eventPublisher.publish(new ApprovalRequestedEvent(
+                nextEventId(), clock.now(), request.requestContext(), saved));
+        return saved;
     }
 
     @Override
@@ -157,6 +164,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         ApprovalRequest saved = updateWithAudit(
                 current, updated, request.requestContext(), "approval-request.decide",
                 Map.of("decision", request.decision().name(), "approver", request.approver().canonicalValue()));
+        publishIfTerminal(saved, request.requestContext());
         dispatchIfTerminal(saved, request.requestContext());
         return saved;
     }
@@ -180,6 +188,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         ApprovalRequest saved = updateWithAudit(
                 current, cancelled, request.requestContext(), "approval-request.cancel",
                 Map.of("reason", request.reason()));
+        publishIfTerminal(saved, request.requestContext());
         dispatchIfTerminal(saved, request.requestContext());
         return saved;
     }
@@ -330,6 +339,17 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         if (request.status() != ApprovalRequestStatus.PENDING) {
             terminalHandler.handle(request, context);
         }
+    }
+
+    private void publishIfTerminal(ApprovalRequest request, RequestContext context) {
+        if (request.status() != ApprovalRequestStatus.PENDING) {
+            eventPublisher.publish(new ApprovalCompletedEvent(
+                    nextEventId(), clock.now(), context, request));
+        }
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(IdGenerationRequest.of("governance", "approval-event"));
     }
 
     private static int stepIndex(ApprovalRequest request, String stepKey) {
