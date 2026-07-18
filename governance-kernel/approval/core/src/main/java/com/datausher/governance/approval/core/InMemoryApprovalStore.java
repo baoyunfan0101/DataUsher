@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentMap;
 public final class InMemoryApprovalStore implements ApprovalStore {
     private final ConcurrentMap<String, ApprovalTemplate> templates = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ApprovalRequest> requests = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, String> idempotencyIndex = new ConcurrentHashMap<>();
 
     @Override
     public Optional<ApprovalTemplate> findTemplate(ApprovalTemplateKey templateKey, long version) {
@@ -66,16 +67,29 @@ public final class InMemoryApprovalStore implements ApprovalStore {
     }
 
     @Override
-    public void createRequest(ApprovalRequest request) {
-        ApprovalRequest existing = requests.putIfAbsent(request.requestId().value(), request);
-        if (existing != null) {
-            throw new IllegalStateException("approval request already exists: " + request.requestId());
-        }
+    public Optional<ApprovalRequest> findRequestByIdempotencyKey(String idempotencyKey) {
+        String requestId = idempotencyIndex.get(idempotencyKey);
+        return requestId == null ? Optional.empty() : Optional.ofNullable(requests.get(requestId));
     }
 
     @Override
-    public void deleteRequest(ApprovalRequest request) {
-        if (!requests.remove(request.requestId().value(), request)) {
+    public synchronized void createRequest(ApprovalRequest request) {
+        if (requests.containsKey(request.requestId().value())) {
+            throw new IllegalStateException("approval request already exists: " + request.requestId());
+        }
+        String existingId = idempotencyIndex.putIfAbsent(
+                request.idempotencyKey(), request.requestId().value());
+        if (existingId != null) {
+            throw new IllegalStateException(
+                    "approval idempotency key already exists: " + request.idempotencyKey());
+        }
+        requests.put(request.requestId().value(), request);
+    }
+
+    @Override
+    public synchronized void deleteRequest(ApprovalRequest request) {
+        if (!requests.remove(request.requestId().value(), request)
+                || !idempotencyIndex.remove(request.idempotencyKey(), request.requestId().value())) {
             throw new IllegalStateException("approval request changed before rollback: " + request.requestId());
         }
     }

@@ -148,7 +148,8 @@ class GovernanceWorkflowCompositionTest {
 
         var request = approvals.submit(new SubmitApprovalRequest(
                 approvalTemplate, "Publish Daily Orders", workflow, owner,
-                new ApprovalCallbackRef(callbackType, workflow.resourceId(), Map.of()), Map.of(), context));
+                new ApprovalCallbackRef(callbackType, workflow.resourceId(), Map.of()),
+                "publish-daily-orders", Map.of(), context));
         request = approvals.decide(new DecideApprovalRequest(
                 request.requestId(), owner, ApprovalDecisionType.APPROVE, "approved", context));
 

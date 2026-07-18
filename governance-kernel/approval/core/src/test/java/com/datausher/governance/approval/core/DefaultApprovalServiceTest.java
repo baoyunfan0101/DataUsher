@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DefaultApprovalServiceTest {
     @Test
@@ -40,7 +41,16 @@ class DefaultApprovalServiceTest {
                                 List.of(ApproverSelector.subject(operator)), 1)
                 ), Map.of(), context));
         ApprovalRequest request = service.submit(new SubmitApprovalRequest(
-                key, "Publish daily orders", target, requester, null, Map.of(), context));
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context));
+        ApprovalRequest duplicate = service.submit(new SubmitApprovalRequest(
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context));
+
+        assertEquals(request.requestId(), duplicate.requestId());
+        assertThrows(IllegalStateException.class, () -> service.submit(new SubmitApprovalRequest(
+                key, "Different request", target, requester, null,
+                "publish-daily-orders", Map.of(), context)));
 
         request = service.decide(new DecideApprovalRequest(
                 request.requestId(), reviewer, ApprovalDecisionType.APPROVE, "ok", context));
@@ -66,7 +76,8 @@ class DefaultApprovalServiceTest {
                 List.of(new ApprovalStepDefinition("review", "Review",
                         List.of(ApproverSelector.subject(reviewer)), 1)), Map.of(), context));
         ApprovalRequest request = service.submit(new SubmitApprovalRequest(
-                key, "Publish daily orders", target, requester, null, Map.of(), context));
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context));
 
         request = service.decide(new DecideApprovalRequest(
                 request.requestId(), reviewer, ApprovalDecisionType.REJECT, "unsafe", context));

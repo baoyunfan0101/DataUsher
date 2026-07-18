@@ -75,6 +75,7 @@ class DefaultApprovalCallbackRegistryTest {
                 new ApprovalPurpose("workflow-publish"), "Publish", ResourceRef.global("workflow", "daily"),
                 subject, ApprovalRequestStatus.APPROVED, List.of(step),
                 new ApprovalCallbackRef(type, "daily", Map.of()),
-                Instant.parse("2026-07-18T00:00:00Z"), Instant.parse("2026-07-18T00:01:00Z"), Map.of());
+                "approval-1", Instant.parse("2026-07-18T00:00:00Z"),
+                Instant.parse("2026-07-18T00:01:00Z"), Map.of());
     }
 }

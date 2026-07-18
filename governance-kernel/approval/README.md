@@ -10,6 +10,7 @@ default lifecycle services.
 - Construct `approval-core` only in an application composition root.
 - Publish a new template version for every template change.
 - Submit by template key; each request records the selected version and resolved step snapshot.
+- Reuse a submission idempotency key only for the same logical approval request.
 - Register an `ApproverSelectorResolver` for every selector type used by a template.
 - Use resource-owner selectors when approval responsibility follows resource ownership.
 - Register callback handlers before requests of that callback type reach terminal callback delivery.

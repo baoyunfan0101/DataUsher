@@ -15,5 +15,7 @@ public interface ApprovalQueryService {
 
     Optional<ApprovalRequest> findRequest(ApprovalRequestId requestId);
 
+    Optional<ApprovalRequest> findRequestByIdempotencyKey(String idempotencyKey);
+
     PageResult<ApprovalRequest> searchRequests(ApprovalRequestQuery query, PageRequest pageRequest);
 }

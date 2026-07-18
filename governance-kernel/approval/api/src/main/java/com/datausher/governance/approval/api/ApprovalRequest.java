@@ -19,6 +19,7 @@ public record ApprovalRequest(
         ApprovalRequestStatus status,
         List<ApprovalStep> steps,
         ApprovalCallbackRef callback,
+        String idempotencyKey,
         Instant createdAt,
         Instant completedAt,
         Map<String, String> attributes
@@ -35,10 +36,12 @@ public record ApprovalRequest(
         requestedBy = Objects.requireNonNull(requestedBy, "requestedBy must not be null");
         status = Objects.requireNonNull(status, "status must not be null");
         steps = List.copyOf(Objects.requireNonNull(steps, "steps must not be null"));
+        idempotencyKey = Objects.requireNonNull(
+                idempotencyKey, "idempotencyKey must not be null").trim();
         createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
-        if (title.isEmpty() || steps.isEmpty()) {
-            throw new IllegalArgumentException("title and steps must not be empty");
+        if (title.isEmpty() || steps.isEmpty() || idempotencyKey.isEmpty()) {
+            throw new IllegalArgumentException("title, steps, and idempotencyKey must not be empty");
         }
         if ((status == ApprovalRequestStatus.PENDING) == (completedAt != null)) {
             throw new IllegalArgumentException("completedAt must be null only while pending");

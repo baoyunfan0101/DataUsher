@@ -83,6 +83,13 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     @Override
     public ApprovalRequest submit(SubmitApprovalRequest request) {
         Objects.requireNonNull(request, "request must not be null");
+        Optional<ApprovalRequest> existing = store.findRequestByIdempotencyKey(request.idempotencyKey());
+        if (existing.isPresent()) {
+            if (!matchesSubmission(existing.orElseThrow(), request)) {
+                throw new IllegalStateException("idempotency key was used for a different approval request");
+            }
+            return existing.orElseThrow();
+        }
         requireActiveResource(request.targetResource());
         requireActiveSubject(request.requestedBy());
         ApprovalTemplate template = store.findLatestTemplate(request.templateKey())
@@ -94,7 +101,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
                         IdGenerationRequest.of("governance", "approval-request"))),
                 template.templateKey(), template.version(), template.purpose(), request.title(),
                 request.targetResource(), request.requestedBy(), ApprovalRequestStatus.PENDING,
-                steps, request.callback(), clock.now(), null, request.attributes());
+                steps, request.callback(), request.idempotencyKey(), clock.now(), null, request.attributes());
         return commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ApprovalRequest execute() {
@@ -167,6 +174,15 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     @Override
     public Optional<ApprovalRequest> findRequest(ApprovalRequestId requestId) {
         return store.findRequest(Objects.requireNonNull(requestId, "requestId must not be null"));
+    }
+
+    @Override
+    public Optional<ApprovalRequest> findRequestByIdempotencyKey(String idempotencyKey) {
+        String normalized = Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null").trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("idempotencyKey must not be blank");
+        }
+        return store.findRequestByIdempotencyKey(normalized);
     }
 
     @Override
@@ -320,7 +336,16 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         return new ApprovalRequest(
                 request.requestId(), request.templateKey(), request.templateVersion(), request.purpose(),
                 request.title(), request.targetResource(), request.requestedBy(), status, steps,
-                request.callback(), request.createdAt(), completedAt, request.attributes());
+                request.callback(), request.idempotencyKey(), request.createdAt(), completedAt, request.attributes());
+    }
+
+    private static boolean matchesSubmission(ApprovalRequest existing, SubmitApprovalRequest request) {
+        return existing.templateKey().equals(request.templateKey())
+                && existing.title().equals(request.title())
+                && existing.targetResource().equals(request.targetResource())
+                && existing.requestedBy().equals(request.requestedBy())
+                && Objects.equals(existing.callback(), request.callback())
+                && existing.attributes().equals(request.attributes());
     }
 
     private static AuditRecordRequest requestAudit(

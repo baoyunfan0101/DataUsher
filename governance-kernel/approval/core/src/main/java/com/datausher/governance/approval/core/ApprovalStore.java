@@ -24,6 +24,8 @@ public interface ApprovalStore {
 
     Optional<ApprovalRequest> findRequest(ApprovalRequestId requestId);
 
+    Optional<ApprovalRequest> findRequestByIdempotencyKey(String idempotencyKey);
+
     void createRequest(ApprovalRequest request);
 
     void deleteRequest(ApprovalRequest request);
