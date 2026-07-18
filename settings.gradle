@@ -38,6 +38,8 @@ include(
     "integration-kernel:scheduler-adapters-api",
     "integration-kernel:llm-provider-adapters-api",
     "integration-kernel:adapter-contract-tests",
+    "data-kernel:datasource-connectivity-api",
+    "data-kernel:datasource-connectivity-core",
     "datausher-app"
 )
 
@@ -87,3 +89,7 @@ project(":integration-kernel:llm-provider-adapters-api").projectDir =
         file("integration-kernel/llm-provider-adapters/api")
 project(":integration-kernel:adapter-contract-tests").projectDir =
         file("integration-kernel/adapter-contract-tests")
+project(":data-kernel:datasource-connectivity-api").projectDir =
+        file("data-kernel/datasource-connectivity/api")
+project(":data-kernel:datasource-connectivity-core").projectDir =
+        file("data-kernel/datasource-connectivity/core")
