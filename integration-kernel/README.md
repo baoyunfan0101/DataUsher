@@ -12,3 +12,4 @@
 - Pass only `IntegrationValue` across dynamic data boundaries.
 - Store only opaque secret-manager URIs in `CredentialBinding`; never put secret material in options or attributes.
 - Map external failures with `IntegrationErrorMapper` before returning them to business modules.
+- Run the applicable `adapter-contract-tests` checks for every concrete adapter.

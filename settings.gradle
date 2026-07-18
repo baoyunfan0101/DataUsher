@@ -37,6 +37,7 @@ include(
     "integration-kernel:compute-engine-adapters-api",
     "integration-kernel:scheduler-adapters-api",
     "integration-kernel:llm-provider-adapters-api",
+    "integration-kernel:adapter-contract-tests",
     "datausher-app"
 )
 
@@ -84,3 +85,5 @@ project(":integration-kernel:scheduler-adapters-api").projectDir =
         file("integration-kernel/scheduler-adapters/api")
 project(":integration-kernel:llm-provider-adapters-api").projectDir =
         file("integration-kernel/llm-provider-adapters/api")
+project(":integration-kernel:adapter-contract-tests").projectDir =
+        file("integration-kernel/adapter-contract-tests")

@@ -118,6 +118,18 @@ project(":integration-kernel:integration-runtime-core") {
     }
 }
 
+project(":integration-kernel:adapter-contract-tests") {
+    dependencies {
+        api platform("org.junit:junit-bom:5.11.4")
+        api "org.junit.jupiter:junit-jupiter-api"
+        api project(":integration-kernel:integration-runtime-api")
+        api project(":integration-kernel:datasource-adapters-api")
+        api project(":integration-kernel:compute-engine-adapters-api")
+        api project(":integration-kernel:scheduler-adapters-api")
+        api project(":integration-kernel:llm-provider-adapters-api")
+    }
+}
+
 configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
@@ -176,6 +188,7 @@ configure([
         project(":integration-kernel:compute-engine-adapters-api"),
         project(":integration-kernel:scheduler-adapters-api"),
         project(":integration-kernel:llm-provider-adapters-api"),
+        project(":integration-kernel:adapter-contract-tests"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -258,6 +271,13 @@ def allowedProjectDependencies = [
         ] as Set,
         ":integration-kernel:llm-provider-adapters-api": [
                 ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":integration-kernel:adapter-contract-tests": [
+                ":integration-kernel:integration-runtime-api",
+                ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:compute-engine-adapters-api",
+                ":integration-kernel:scheduler-adapters-api",
+                ":integration-kernel:llm-provider-adapters-api"
         ] as Set,
         ":datausher-app": [
                 ":platform-kernel:shared-types-core",
