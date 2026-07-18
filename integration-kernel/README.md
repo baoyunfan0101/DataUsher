@@ -7,6 +7,8 @@
 - Concrete adapters own vendor SDK calls and vendor-to-contract translation; vendor types must not cross an API boundary.
 - Business modules own business state and workflows; adapters own no business lifecycle.
 - Route adapter calls through `AdapterInvocationExecutor` to enforce request deadlines.
+- Model compute work as managed jobs: submit once, retain the opaque handle, and
+  use capability-gated status, cancellation, log, result, and explain operations.
 - Concrete adapters must propagate interruption to vendor calls when cancellation is supported.
 - Declare supported operations with the module capability constants and register adapters through `AdapterRegistry`.
 - Pass only `IntegrationValue` across dynamic data boundaries.
