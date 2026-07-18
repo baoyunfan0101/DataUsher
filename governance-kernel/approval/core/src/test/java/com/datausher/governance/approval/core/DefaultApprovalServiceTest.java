@@ -53,12 +53,14 @@ class DefaultApprovalServiceTest {
                 "publish-daily-orders", Map.of(), context)));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), reviewer, ApprovalDecisionType.APPROVE, "ok", context));
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok", context));
         assertEquals(ApprovalRequestStatus.PENDING, request.status());
         assertEquals(ApprovalStepStatus.ACTIVE, request.steps().get(1).status());
+        assertEquals(request, service.decide(new DecideApprovalRequest(
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok", context)));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), operator, ApprovalDecisionType.APPROVE, "ok", context));
+                request.requestId(), "operate", operator, ApprovalDecisionType.APPROVE, "ok", context));
         assertEquals(ApprovalRequestStatus.APPROVED, request.status());
         assertEquals(1, request.templateVersion());
     }
@@ -80,7 +82,7 @@ class DefaultApprovalServiceTest {
                 "publish-daily-orders", Map.of(), context));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), reviewer, ApprovalDecisionType.REJECT, "unsafe", context));
+                request.requestId(), "review", reviewer, ApprovalDecisionType.REJECT, "unsafe", context));
 
         assertEquals(ApprovalRequestStatus.REJECTED, request.status());
         assertEquals(ApprovalStepStatus.REJECTED, request.steps().get(0).status());

@@ -124,14 +124,29 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     @Override
     public ApprovalRequest decide(DecideApprovalRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        ApprovalRequest current = requirePending(request.requestId());
-        int activeIndex = activeStepIndex(current);
+        ApprovalRequest current = store.findRequest(request.requestId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "approval request does not exist: " + request.requestId()));
+        int activeIndex = stepIndex(current, request.stepKey());
         ApprovalStep active = current.steps().get(activeIndex);
+        Optional<ApprovalStepDecision> previousDecision = active.decisions().stream()
+                .filter(decision -> decision.approver().equals(request.approver()))
+                .findFirst();
+        if (previousDecision.isPresent()) {
+            ApprovalStepDecision decision = previousDecision.orElseThrow();
+            if (decision.decision() == request.decision() && decision.comment().equals(request.comment())) {
+                return current;
+            }
+            throw new IllegalStateException("approver has already decided the approval step differently");
+        }
+        if (current.status() != ApprovalRequestStatus.PENDING) {
+            throw new IllegalStateException("approval request is already terminal: " + request.requestId());
+        }
+        if (active.status() != ApprovalStepStatus.ACTIVE) {
+            throw new IllegalStateException("approval step is not active: " + request.stepKey());
+        }
         if (!active.eligibleApprovers().contains(request.approver())) {
             throw new IllegalArgumentException("subject is not eligible for the active approval step");
-        }
-        if (active.decisions().stream().anyMatch(decision -> decision.approver().equals(request.approver()))) {
-            throw new IllegalStateException("approver has already decided the active step");
         }
         ApprovalRequest updated = applyDecision(current, activeIndex, request);
         ApprovalRequest saved = updateWithAudit(
@@ -144,7 +159,15 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     @Override
     public ApprovalRequest cancel(CancelApprovalRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        ApprovalRequest current = requirePending(request.requestId());
+        ApprovalRequest current = store.findRequest(request.requestId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "approval request does not exist: " + request.requestId()));
+        if (current.status() == ApprovalRequestStatus.CANCELLED) {
+            return current;
+        }
+        if (current.status() != ApprovalRequestStatus.PENDING) {
+            throw new IllegalStateException("approval request is already terminal: " + request.requestId());
+        }
         List<ApprovalStep> steps = current.steps().stream()
                 .map(step -> step.status() == ApprovalStepStatus.APPROVED ? step : withStatus(step, ApprovalStepStatus.SKIPPED))
                 .toList();
@@ -304,13 +327,13 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         }
     }
 
-    private static int activeStepIndex(ApprovalRequest request) {
+    private static int stepIndex(ApprovalRequest request, String stepKey) {
         for (int index = 0; index < request.steps().size(); index++) {
-            if (request.steps().get(index).status() == ApprovalStepStatus.ACTIVE) {
+            if (request.steps().get(index).stepKey().equals(stepKey)) {
                 return index;
             }
         }
-        throw new IllegalStateException("pending approval request has no active step");
+        throw new IllegalArgumentException("approval step does not exist: " + stepKey);
     }
 
     private static ApprovalStep withStatus(ApprovalStep step, ApprovalStepStatus status) {

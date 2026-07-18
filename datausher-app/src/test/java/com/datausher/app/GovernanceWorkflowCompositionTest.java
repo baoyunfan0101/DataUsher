@@ -151,7 +151,8 @@ class GovernanceWorkflowCompositionTest {
                 new ApprovalCallbackRef(callbackType, workflow.resourceId(), Map.of()),
                 "publish-daily-orders", Map.of(), context));
         request = approvals.decide(new DecideApprovalRequest(
-                request.requestId(), owner, ApprovalDecisionType.APPROVE, "approved", context));
+                request.requestId(), "owner-review", owner,
+                ApprovalDecisionType.APPROVE, "approved", context));
 
         assertEquals(ApprovalRequestStatus.APPROVED, request.status());
         assertEquals(ApprovalCallbackDeliveryStatus.SUCCEEDED,
