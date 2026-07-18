@@ -46,6 +46,11 @@ import com.datausher.workflow.api.CreateWorkflowRequest;
 import com.datausher.workflow.api.CreateWorkflowVersionRequest;
 import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.WorkflowId;
+import com.datausher.workflow.api.WorkflowRuntimeBinding;
+import com.datausher.workflow.api.WorkflowSchedule;
+import com.datausher.workflow.api.WorkflowScheduleId;
+import com.datausher.workflow.api.WorkflowScheduleStatus;
+import com.datausher.workflow.api.WorkflowScheduleType;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
 import com.datausher.workflow.api.WorkflowVersion;
 import com.datausher.workflow.api.WorkflowVersionSpec;
@@ -81,6 +86,9 @@ class DefaultScriptPublicationServiceTest {
         assertEquals("new-payload",
                 workflowVersion.specification().tasks().getFirst()
                         .executionSpecification().workload().payload());
+        assertEquals(2, workflowVersion.specification().schedules().size());
+        assertEquals("scheduler", workflowVersion.specification().runtimeBinding()
+                .adapterId().orElseThrow());
         assertEquals(List.of(
                         "development.publication-state-changed",
                         "development.publication-state-changed",
@@ -122,7 +130,11 @@ class DefaultScriptPublicationServiceTest {
                 workflowId, workflowRef, "Workflow", Map.of(), context));
         workflows.createVersion(new CreateWorkflowVersionRequest(
                 workflowId, workflow.revision(), new WorkflowVersionSpec(
-                        List.of(task("old-payload")), List.of(), Optional.empty(), Map.of()), context));
+                        List.of(task("old-payload")), List.of(), List.of(
+                        schedule("morning", "0 8 * * *"),
+                        schedule("evening", "0 20 * * *")),
+                        WorkflowRuntimeBinding.schedulerManaged(
+                                "scheduler", "binding", Map.of()), Map.of()), context));
         ScriptVersion script = new ScriptVersion(
                 new ScriptId("script-1"), 1, specification("new-payload"),
                 Instant.EPOCH, "actor-1", Map.of());
@@ -157,6 +169,12 @@ class DefaultScriptPublicationServiceTest {
                 new ExecutionWorkload(
                         new ExecutionWorkloadType("vendor-task"), payload, Map.of(), Map.of()),
                 ExecutionResultMode.REFERENCE, 100);
+    }
+
+    private static WorkflowSchedule schedule(String id, String expression) {
+        return new WorkflowSchedule(
+                new WorkflowScheduleId(id), WorkflowScheduleType.CRON, expression,
+                java.time.ZoneId.of("UTC"), WorkflowScheduleStatus.ENABLED, Map.of());
     }
 
     private static ScriptQueryService scripts(ScriptVersion version) {

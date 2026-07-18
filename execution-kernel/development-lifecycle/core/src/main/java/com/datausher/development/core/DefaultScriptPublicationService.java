@@ -251,7 +251,8 @@ public final class DefaultScriptPublicationService
         Map<String, String> attributes = new HashMap<>(base.specification().attributes());
         attributes.put(PUBLICATION_ATTRIBUTE, publication.publicationId().value());
         return new WorkflowVersionSpec(
-                tasks, base.specification().dependencies(), base.specification().schedule(), attributes);
+                tasks, base.specification().dependencies(), base.specification().schedules(),
+                base.specification().runtimeBinding(), attributes);
     }
 
     private void completePublished(
