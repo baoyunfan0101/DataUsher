@@ -9,6 +9,8 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ExecutionOrigin;
+import com.datausher.execution.api.ExecutionStateChangedEvent;
+import com.datausher.execution.api.ExecutionSubmittedEvent;
 import com.datausher.execution.api.ExecutionValue;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
@@ -79,6 +81,9 @@ class DefaultExecutionServiceTest {
         assertTrue(fixture.events.stream()
                 .map(DomainEvent::eventType)
                 .anyMatch("ExecutionCompleted"::equals));
+        assertEquals(ExecutionSubmittedEvent.class, fixture.events.get(0).getClass());
+        assertTrue(fixture.events.stream().skip(1)
+                .allMatch(ExecutionStateChangedEvent.class::isInstance));
     }
 
     @Test
