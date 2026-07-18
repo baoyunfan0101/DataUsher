@@ -1,6 +1,6 @@
 package com.datausher.execution.core;
 
-record ExecutionDispatch(
+public record ExecutionDispatch(
         StoredExecution execution,
         StoredExecutionInstance instance
 ) {
