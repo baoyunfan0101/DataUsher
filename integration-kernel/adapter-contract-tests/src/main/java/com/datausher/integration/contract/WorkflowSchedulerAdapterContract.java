@@ -30,6 +30,8 @@ public final class WorkflowSchedulerAdapterContract {
                 "published workflows must preserve credential binding identity");
         assertEquals(definition.workflowId(), workflow.workflowId(),
                 "published workflows must preserve workflow identity");
+        assertEquals(definition.idempotencyKey(), workflow.idempotencyKey(),
+                "published workflows must preserve publication idempotency identity");
         assertEquals(definition.revision(), workflow.revision(),
                 "published workflows must preserve workflow revision");
     }

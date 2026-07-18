@@ -16,7 +16,7 @@ class SchedulerContractTest {
     void requiresPositiveWorkflowRevisions() {
         assertThrows(IllegalArgumentException.class,
                 () -> new WorkflowDefinition(
-                        "scheduler-prod", "daily-load", 0,
+                        "scheduler-prod", "daily-load", 0, "publish-1",
                         List.of(new SchedulerTaskDefinition(
                                 "extract", SchedulerTaskType.PLATFORM_EXECUTION,
                                 "task:extract", Map.of(), Map.of())),

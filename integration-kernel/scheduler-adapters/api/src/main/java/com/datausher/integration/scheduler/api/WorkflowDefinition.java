@@ -11,6 +11,7 @@ public record WorkflowDefinition(
         String bindingId,
         String workflowId,
         long revision,
+        String idempotencyKey,
         List<SchedulerTaskDefinition> tasks,
         List<SchedulerTaskDependency> dependencies,
         Optional<SchedulerSchedule> schedule,
@@ -19,6 +20,7 @@ public record WorkflowDefinition(
     public WorkflowDefinition {
         bindingId = IntegrationIdentifiers.normalize(bindingId, "bindingId");
         workflowId = IntegrationIdentifiers.normalize(workflowId, "workflowId");
+        idempotencyKey = IntegrationIdentifiers.requireText(idempotencyKey, "idempotencyKey");
         tasks = List.copyOf(tasks);
         dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
         schedule = schedule == null ? Optional.empty() : schedule;
