@@ -290,9 +290,12 @@ project(":datausher-app") {
         implementation project(":platform-kernel:configuration-core")
         implementation project(":platform-kernel:audit-core")
         implementation project(":platform-kernel:observability-core")
+        implementation project(":platform-kernel:notification-core")
         implementation project(":governance-kernel:project-environment-core")
         implementation project(":governance-kernel:resource-registry-core")
         implementation project(":governance-kernel:identity-access-core")
+        implementation project(":governance-kernel:resource-ownership-core")
+        implementation project(":governance-kernel:approval-core")
         implementation project(":integration-kernel:integration-runtime-core")
         implementation project(":integration-kernel:datasource-adapters-api")
         implementation project(":integration-kernel:compute-engine-adapters-api")
@@ -527,9 +530,12 @@ def allowedProjectDependencies = [
                 ":platform-kernel:configuration-core",
                 ":platform-kernel:audit-core",
                 ":platform-kernel:observability-core",
+                ":platform-kernel:notification-core",
                 ":governance-kernel:project-environment-core",
                 ":governance-kernel:resource-registry-core",
                 ":governance-kernel:identity-access-core",
+                ":governance-kernel:resource-ownership-core",
+                ":governance-kernel:approval-core",
                 ":integration-kernel:integration-runtime-core",
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",
