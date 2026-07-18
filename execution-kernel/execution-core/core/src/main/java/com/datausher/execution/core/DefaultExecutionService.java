@@ -5,9 +5,14 @@ import com.datausher.execution.api.ExecutionAccount;
 import com.datausher.execution.api.ExecutionAccountStatus;
 import com.datausher.execution.api.ExecutionCommandService;
 import com.datausher.execution.api.ExecutionEvents;
+import com.datausher.execution.api.ExecutionExplainPlan;
+import com.datausher.execution.api.ExecutionExplainService;
 import com.datausher.execution.api.ExecutionFailure;
 import com.datausher.execution.api.ExecutionInstance;
 import com.datausher.execution.api.ExecutionInstanceId;
+import com.datausher.execution.api.ExecutionLogEntry;
+import com.datausher.execution.api.ExecutionLogPage;
+import com.datausher.execution.api.ExecutionLogQueryService;
 import com.datausher.execution.api.ExecutionQuery;
 import com.datausher.execution.api.ExecutionQueryService;
 import com.datausher.execution.api.ExecutionQueue;
@@ -15,14 +20,27 @@ import com.datausher.execution.api.ExecutionQueueId;
 import com.datausher.execution.api.ExecutionQueueStatus;
 import com.datausher.execution.api.ExecutionRequest;
 import com.datausher.execution.api.ExecutionRequestId;
+import com.datausher.execution.api.ExecutionResultColumn;
+import com.datausher.execution.api.ExecutionResultMode;
+import com.datausher.execution.api.ExecutionResultPage;
+import com.datausher.execution.api.ExecutionResultQueryService;
 import com.datausher.execution.api.ExecutionState;
+import com.datausher.execution.api.ExecutionWorkloadType;
+import com.datausher.execution.api.ExplainExecutionRequest;
+import com.datausher.execution.api.ReadExecutionLogRequest;
+import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.integration.compute.api.ComputeCapabilities;
 import com.datausher.integration.compute.api.ComputeEngineAdapter;
 import com.datausher.integration.compute.api.ComputeJobHandle;
+import com.datausher.integration.compute.api.ComputeJobLogPage;
 import com.datausher.integration.compute.api.ComputeJobRequest;
+import com.datausher.integration.compute.api.ComputeJobResultPage;
 import com.datausher.integration.compute.api.ComputeJobState;
 import com.datausher.integration.compute.api.ComputeJobStatus;
+import com.datausher.integration.compute.api.SqlEngineAdapter;
+import com.datausher.integration.compute.api.SqlExecutionRequest;
+import com.datausher.integration.compute.api.SqlExplainPlan;
 import com.datausher.integration.runtime.api.AdapterInvocationExecutor;
 import com.datausher.integration.runtime.api.AdapterRegistry;
 import com.datausher.integration.runtime.api.AdapterRequestContext;
@@ -46,7 +64,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public final class DefaultExecutionService
-        implements ExecutionCommandService, ExecutionQueryService, ExecutionWorker {
+        implements ExecutionCommandService, ExecutionQueryService, ExecutionLogQueryService,
+        ExecutionResultQueryService, ExecutionExplainService, ExecutionWorker {
     private static final String SOURCE_MODULE = "execution-core";
 
     private final ExecutionStore executionStore;
@@ -284,6 +303,104 @@ public final class DefaultExecutionService
         return executionStore.search(query, pageRequest);
     }
 
+    @Override
+    public ExecutionLogPage read(ReadExecutionLogRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        StoredExecutionInstance instance = requireInstance(request.instanceId());
+        ComputeJobHandle handle = requireHandle(instance);
+        StoredExecution execution = requireExecution(instance.instance().requestId());
+        ExecutionAccount account = account(execution.request());
+        ComputeEngineAdapter adapter = requireCapability(
+                requireAdapter(account), ComputeCapabilities.JOB_LOGS);
+        AdapterRequestContext adapterContext = adapterContext(request.requestContext());
+        ComputeJobLogPage page = invocationExecutor.execute(
+                adapterContext, adapter, "read-logs",
+                () -> adapter.readLogs(
+                        adapterContext, handle, request.afterSequence(), request.limit()));
+        validateLogPage(page, handle, request.afterSequence(), request.limit());
+        return new ExecutionLogPage(
+                page.entries().stream()
+                        .map(entry -> new ExecutionLogEntry(
+                                entry.sequence(), entry.occurredAt(), entry.level(),
+                                entry.message(), entry.attributes()))
+                        .toList(),
+                page.nextSequence(),
+                page.complete()
+        );
+    }
+
+    @Override
+    public ExecutionResultPage read(ReadExecutionResultRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        StoredExecutionInstance instance = requireInstance(request.instanceId());
+        ComputeJobHandle handle = requireHandle(instance);
+        StoredExecution execution = requireExecution(instance.instance().requestId());
+        if (execution.request().resultMode().equals(ExecutionResultMode.DISCARD)) {
+            throw new IllegalStateException("execution result mode discards results");
+        }
+        ExecutionAccount account = account(execution.request());
+        ComputeEngineAdapter adapter = requireCapability(
+                requireAdapter(account), ComputeCapabilities.JOB_RESULTS);
+        AdapterRequestContext adapterContext = adapterContext(request.requestContext());
+        ComputeJobResultPage page = invocationExecutor.execute(
+                adapterContext, adapter, "read-result",
+                () -> adapter.readResult(
+                        adapterContext, handle, request.offset(), request.limit()));
+        validateResultPage(page, handle, request.offset(), request.limit());
+        return new ExecutionResultPage(
+                page.columns().stream()
+                        .map(column -> new ExecutionResultColumn(
+                                column.name(), column.type(), column.nullable(),
+                                column.attributes()))
+                        .toList(),
+                page.rows().stream()
+                        .map(row -> row.stream()
+                                .map(ExecutionValueMapper::fromIntegration)
+                                .toList())
+                        .toList(),
+                page.offset(),
+                page.affectedRows(),
+                page.hasMore(),
+                page.resultReference(),
+                page.attributes()
+        );
+    }
+
+    @Override
+    public ExecutionExplainPlan explain(ExplainExecutionRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        if (!request.workload().type().equals(ExecutionWorkloadType.SQL)) {
+            throw new IllegalArgumentException("explain currently requires an SQL workload");
+        }
+        ExecutionAccount account = requireActiveAccount(request.accountId());
+        requireSupportedWorkload(account, request.workload().type());
+        SqlEngineAdapter adapter = adapterRegistry.find(
+                account.adapterId(), SqlEngineAdapter.class).orElseThrow(() ->
+                new IllegalStateException(
+                        "SQL compute adapter is not registered: " + account.adapterId()));
+        requireCapability(adapter, ComputeCapabilities.SQL_EXPLAIN);
+        AdapterRequestContext adapterContext = adapterContext(request.requestContext());
+        SqlExplainPlan plan = invocationExecutor.execute(
+                adapterContext,
+                adapter,
+                "explain",
+                () -> adapter.explain(adapterContext, new SqlExecutionRequest(
+                        account.credentialBindingId(),
+                        request.workload().payload(),
+                        request.workload().parameters().entrySet().stream()
+                                .collect(Collectors.toUnmodifiableMap(
+                                        Map.Entry::getKey,
+                                        entry -> ExecutionValueMapper.toIntegration(
+                                                entry.getValue())
+                                )),
+                        1,
+                        request.workload().options()
+                ))
+        );
+        Objects.requireNonNull(plan, "SQL compute adapter returned a null explain plan");
+        return new ExecutionExplainPlan(plan.format(), plan.content(), plan.attributes());
+    }
+
     private ExecutionInstance failDispatch(
             ExecutionDispatch dispatch,
             ExecutionAccount account,
@@ -330,7 +447,8 @@ public final class DefaultExecutionService
             ComputeJobHandle handle,
             RequestContext requestContext
     ) {
-        ComputeEngineAdapter adapter = requireAdapter(account);
+        ComputeEngineAdapter adapter = requireCapability(
+                requireAdapter(account), ComputeCapabilities.JOB_CANCELLATION);
         AdapterRequestContext adapterContext = adapterContext(requestContext);
         invocationExecutor.execute(
                 adapterContext, adapter, "cancel",
@@ -372,6 +490,17 @@ public final class DefaultExecutionService
         if (!adapter.descriptor().supports(ComputeCapabilities.JOB_EXECUTION)) {
             throw new IllegalStateException(
                     "compute adapter does not support job execution: " + account.adapterId());
+        }
+        return adapter;
+    }
+
+    private static <T extends ComputeEngineAdapter> T requireCapability(
+            T adapter,
+            String capability
+    ) {
+        if (!adapter.descriptor().supports(capability)) {
+            throw new IllegalStateException(
+                    "compute adapter does not support capability: " + capability);
         }
         return adapter;
     }
@@ -507,6 +636,45 @@ public final class DefaultExecutionService
         if (!status.handle().equals(handle)) {
             throw new IllegalStateException(
                     "compute adapter returned status for a different handle");
+        }
+    }
+
+    private static ComputeJobHandle requireHandle(StoredExecutionInstance instance) {
+        return instance.handle().orElseThrow(() -> new IllegalStateException(
+                "execution instance has no external handle: "
+                        + instance.instance().instanceId()));
+    }
+
+    private static void validateLogPage(
+            ComputeJobLogPage page,
+            ComputeJobHandle handle,
+            long afterSequence,
+            int limit
+    ) {
+        Objects.requireNonNull(page, "compute adapter returned a null log page");
+        if (!page.handle().equals(handle)) {
+            throw new IllegalStateException("compute adapter returned logs for a different handle");
+        }
+        if (page.entries().size() > limit
+                || page.entries().stream().anyMatch(entry -> entry.sequence() <= afterSequence)
+                || page.nextSequence() <= afterSequence) {
+            throw new IllegalStateException("compute adapter returned an invalid log page");
+        }
+    }
+
+    private static void validateResultPage(
+            ComputeJobResultPage page,
+            ComputeJobHandle handle,
+            long offset,
+            int limit
+    ) {
+        Objects.requireNonNull(page, "compute adapter returned a null result page");
+        if (!page.handle().equals(handle)) {
+            throw new IllegalStateException(
+                    "compute adapter returned results for a different handle");
+        }
+        if (page.offset() != offset || page.rows().size() > limit) {
+            throw new IllegalStateException("compute adapter returned an invalid result page");
         }
     }
 

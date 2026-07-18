@@ -10,16 +10,24 @@ import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionValue;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
+import com.datausher.execution.api.ExplainExecutionRequest;
+import com.datausher.execution.api.ReadExecutionLogRequest;
+import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.RegisterExecutionAccountRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.integration.compute.api.ComputeCapabilities;
 import com.datausher.integration.compute.api.ComputeEngineAdapter;
 import com.datausher.integration.compute.api.ComputeJobHandle;
+import com.datausher.integration.compute.api.ComputeJobLogEntry;
 import com.datausher.integration.compute.api.ComputeJobLogPage;
 import com.datausher.integration.compute.api.ComputeJobRequest;
 import com.datausher.integration.compute.api.ComputeJobResultPage;
 import com.datausher.integration.compute.api.ComputeJobState;
 import com.datausher.integration.compute.api.ComputeJobStatus;
+import com.datausher.integration.compute.api.ComputeResultColumn;
+import com.datausher.integration.compute.api.SqlEngineAdapter;
+import com.datausher.integration.compute.api.SqlExecutionRequest;
+import com.datausher.integration.compute.api.SqlExplainPlan;
 import com.datausher.integration.runtime.api.AdapterCapability;
 import com.datausher.integration.runtime.api.AdapterDescriptor;
 import com.datausher.integration.runtime.api.AdapterHealth;
@@ -95,6 +103,28 @@ class DefaultExecutionServiceTest {
         assertFalse(fixture.service.dispatchNext(fixture.queueId, fixture.context).isEmpty());
     }
 
+    @Test
+    void exposesPortableLogsResultsAndSqlExplain() {
+        Fixture fixture = new Fixture(1);
+        fixture.service.submit(fixture.submission("select 1 as value"));
+        var instance = fixture.service.dispatchNext(
+                fixture.queueId, fixture.context).orElseThrow();
+
+        var logs = fixture.service.read(new ReadExecutionLogRequest(
+                instance.instanceId(), -1, 10, fixture.context));
+        var result = fixture.service.read(new ReadExecutionResultRequest(
+                instance.instanceId(), 0, 10, fixture.context));
+        var plan = fixture.service.explain(new ExplainExecutionRequest(
+                fixture.accountId,
+                new ExecutionWorkload(
+                        ExecutionWorkloadType.SQL, "select 1", Map.of(), Map.of()),
+                fixture.context));
+
+        assertEquals("completed", logs.entries().getFirst().message());
+        assertEquals(new ExecutionValue.DecimalValue(1), result.rows().getFirst().getFirst());
+        assertEquals("scan constants", plan.content());
+    }
+
     private static final class Fixture {
         private final SystemClock clock = new SystemClock();
         private final RequestContext context = RequestContext.system("request-1", clock.now());
@@ -158,12 +188,19 @@ class DefaultExecutionServiceTest {
         }
     }
 
-    private static final class LifecycleAdapter implements ComputeEngineAdapter {
+    private static final class LifecycleAdapter implements SqlEngineAdapter {
         private static final AdapterDescriptor DESCRIPTOR = new AdapterDescriptor(
                 "lifecycle-fixture",
                 AdapterType.COMPUTE_ENGINE,
                 "1.0.0",
-                Set.of(AdapterCapability.of(ComputeCapabilities.JOB_EXECUTION)),
+                Set.of(
+                        AdapterCapability.of(ComputeCapabilities.JOB_EXECUTION),
+                        AdapterCapability.of(ComputeCapabilities.JOB_CANCELLATION),
+                        AdapterCapability.of(ComputeCapabilities.JOB_LOGS),
+                        AdapterCapability.of(ComputeCapabilities.JOB_RESULTS),
+                        AdapterCapability.of(ComputeCapabilities.SQL_EXECUTION),
+                        AdapterCapability.of(ComputeCapabilities.SQL_EXPLAIN)
+                ),
                 Map.of()
         );
         private int submissions;
@@ -201,7 +238,10 @@ class DefaultExecutionServiceTest {
                 long afterSequence,
                 int limit
         ) {
-            return new ComputeJobLogPage(handle, List.of(), afterSequence, false);
+            return new ComputeJobLogPage(handle, List.of(
+                    new ComputeJobLogEntry(
+                            afterSequence + 1, Instant.now(), "INFO", "completed", Map.of())
+            ), afterSequence + 2, true);
         }
 
         @Override
@@ -212,7 +252,25 @@ class DefaultExecutionServiceTest {
                 int limit
         ) {
             return new ComputeJobResultPage(
-                    handle, List.of(), List.of(), offset, 0, false, "", Map.of());
+                    handle,
+                    List.of(new ComputeResultColumn("value", "bigint", false, Map.of())),
+                    List.of(List.of(
+                            new com.datausher.integration.runtime.api.IntegrationValue.DecimalValue(1)
+                    )),
+                    offset,
+                    0,
+                    false,
+                    "",
+                    Map.of()
+            );
+        }
+
+        @Override
+        public SqlExplainPlan explain(
+                AdapterRequestContext context,
+                SqlExecutionRequest request
+        ) {
+            return new SqlExplainPlan("text", "scan constants", Map.of());
         }
 
         @Override
