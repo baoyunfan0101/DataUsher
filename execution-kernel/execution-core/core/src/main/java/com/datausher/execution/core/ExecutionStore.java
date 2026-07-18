@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ExecutionStore {
-    void create(StoredExecution execution);
+    ExecutionCreateResult create(StoredExecution execution);
 
     Optional<ExecutionDispatch> claimNext(
             ExecutionQueueId queueId,
@@ -31,6 +31,8 @@ public interface ExecutionStore {
     );
 
     Optional<StoredExecution> find(ExecutionRequestId requestId);
+
+    Optional<StoredExecution> findByIdempotencyKey(String idempotencyKey);
 
     Optional<StoredExecutionInstance> findInstance(ExecutionInstanceId instanceId);
 

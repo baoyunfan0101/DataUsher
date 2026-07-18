@@ -23,6 +23,7 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionResultPage;
 import com.datausher.execution.api.ExecutionResultQueryService;
 import com.datausher.execution.api.ExecutionState;
+import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ReadExecutionLogRequest;
 import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
@@ -107,25 +108,44 @@ public final class DefaultExecutionService
     @Override
     public ExecutionRequest submit(SubmitExecutionRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        requireActiveQueue(request.queueId());
-        ExecutionAccount account = requireActiveAccount(request.accountId());
-        requireSupportedWorkload(account, request.workload().type());
+        Optional<StoredExecution> existing = executionStore.findByIdempotencyKey(request.idempotencyKey());
+        if (existing.isPresent()) {
+            ExecutionRequest previous = existing.orElseThrow().request();
+            if (!previous.specification().equals(request.specification())
+                    || !previous.origin().equals(request.origin())) {
+                throw new IllegalStateException(
+                        "idempotency key was used for a different execution request");
+            }
+            return previous;
+        }
+        ExecutionSpecification specification = request.specification();
+        requireActiveQueue(specification.queueId());
+        ExecutionAccount account = requireActiveAccount(specification.accountId());
+        requireSupportedWorkload(account, specification.workload().type());
         requireAdapter(account);
         Instant now = clock.now();
         ExecutionRequest execution = new ExecutionRequest(
                 new ExecutionRequestId(nextId("execution-request")),
-                request.queueId(),
-                request.accountId(),
-                request.workload(),
-                request.resultMode(),
-                request.resultPageSize(),
+                specification,
+                request.idempotencyKey(),
+                request.origin(),
                 ExecutionState.QUEUED,
                 now,
                 now,
                 Optional.empty(),
                 1
         );
-        executionStore.create(new StoredExecution(execution, request.requestContext()));
+        ExecutionCreateResult creation = executionStore.create(
+                new StoredExecution(execution, request.requestContext()));
+        if (!creation.created()) {
+            ExecutionRequest concurrent = creation.execution().request();
+            if (!concurrent.specification().equals(request.specification())
+                    || !concurrent.origin().equals(request.origin())) {
+                throw new IllegalStateException(
+                        "idempotency key was used for a different execution request");
+            }
+            return concurrent;
+        }
         publish(ExecutionEvents.SUBMITTED, request.requestContext(), now);
         publish(ExecutionEvents.QUEUED, request.requestContext(), now);
         return execution;
