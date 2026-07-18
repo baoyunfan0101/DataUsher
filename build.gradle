@@ -186,6 +186,15 @@ project(":adapters:datasource-mysql") {
     }
 }
 
+project(":adapters:compute-local-sql") {
+    dependencies {
+        api project(":integration-kernel:compute-engine-adapters-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        runtimeOnly "com.h2database:h2:2.4.240"
+        testImplementation project(":integration-kernel:adapter-contract-tests")
+    }
+}
+
 configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
@@ -255,6 +264,7 @@ configure([
         project(":execution-kernel:execution-core-api"),
         project(":execution-kernel:execution-core-core"),
         project(":adapters:datasource-mysql"),
+        project(":adapters:compute-local-sql"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -374,6 +384,10 @@ def allowedProjectDependencies = [
         ] as Set,
         ":adapters:datasource-mysql": [
                 ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
+        ":adapters:compute-local-sql": [
+                ":integration-kernel:compute-engine-adapters-api",
                 ":integration-kernel:integration-runtime-api"
         ] as Set,
         ":datausher-app": [

@@ -45,6 +45,7 @@ include(
     "execution-kernel:execution-core-api",
     "execution-kernel:execution-core-core",
     "adapters:datasource-mysql",
+    "adapters:compute-local-sql",
     "datausher-app"
 )
 
@@ -108,3 +109,5 @@ project(":execution-kernel:execution-core-core").projectDir =
         file("execution-kernel/execution-core/core")
 project(":adapters:datasource-mysql").projectDir =
         file("adapters/datasource-mysql")
+project(":adapters:compute-local-sql").projectDir =
+        file("adapters/compute-local-sql")

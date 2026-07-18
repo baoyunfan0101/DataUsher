@@ -11,6 +11,8 @@ import com.datausher.integration.runtime.api.AdapterRequestContext;
 import com.datausher.integration.runtime.api.AdapterType;
 
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,7 +46,7 @@ public final class ComputeEngineAdapterContract {
         ComputeJobHandle handle = adapter.submit(context, request);
         verify(adapter, request, handle, sensitiveValues);
 
-        ComputeJobStatus status = adapter.status(context, handle);
+        ComputeJobStatus status = awaitTerminal(adapter, context, handle);
         assertEquals(handle, status.handle(),
                 "job status must preserve the submitted handle");
 
@@ -73,5 +75,22 @@ public final class ComputeEngineAdapterContract {
         }
 
         return handle;
+    }
+
+    private static ComputeJobStatus awaitTerminal(
+            ComputeEngineAdapter adapter,
+            AdapterRequestContext context,
+            ComputeJobHandle handle
+    ) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        ComputeJobStatus status = adapter.status(context, handle);
+        while (!status.terminal() && System.nanoTime() < deadline) {
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(5));
+            status = adapter.status(context, handle);
+        }
+        assertTrue(status.terminal(), "compute job must reach a terminal state");
+        assertEquals(com.datausher.integration.compute.api.ComputeJobState.SUCCEEDED,
+                status.state(), "contract workload must succeed: " + status.details());
+        return status;
     }
 }
