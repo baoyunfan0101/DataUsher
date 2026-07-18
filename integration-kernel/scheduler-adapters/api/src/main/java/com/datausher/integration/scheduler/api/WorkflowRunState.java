@@ -6,5 +6,6 @@ public enum WorkflowRunState {
     SUCCEEDED,
     FAILED,
     CANCELLED,
+    TIMED_OUT,
     UNKNOWN
 }
