@@ -26,6 +26,7 @@ include(
     "platform-kernel:observability-api",
     "platform-kernel:observability-core",
     "platform-kernel:notification-api",
+    "platform-kernel:notification-core",
     "governance-kernel:project-environment-api",
     "governance-kernel:project-environment-core",
     "governance-kernel:resource-registry-api",
@@ -78,6 +79,8 @@ project(":platform-kernel:observability-core").projectDir =
         file("platform-kernel/observability/core")
 project(":platform-kernel:notification-api").projectDir =
         file("platform-kernel/notification/api")
+project(":platform-kernel:notification-core").projectDir =
+        file("platform-kernel/notification/core")
 project(":governance-kernel:project-environment-api").projectDir =
         file("governance-kernel/project-environment/api")
 project(":governance-kernel:project-environment-core").projectDir =

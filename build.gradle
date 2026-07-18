@@ -73,6 +73,16 @@ project(":platform-kernel:notification-api") {
     }
 }
 
+project(":platform-kernel:notification-core") {
+    dependencies {
+        api project(":platform-kernel:notification-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:audit-core")
+        testImplementation project(":platform-kernel:shared-types-core")
+    }
+}
+
 project(":governance-kernel:project-environment-api") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
@@ -313,6 +323,7 @@ configure([
         project(":platform-kernel:observability-api"),
         project(":platform-kernel:observability-core"),
         project(":platform-kernel:notification-api"),
+        project(":platform-kernel:notification-core"),
         project(":governance-kernel:project-environment-api"),
         project(":governance-kernel:project-environment-core"),
         project(":governance-kernel:resource-registry-api"),
@@ -381,6 +392,11 @@ def allowedProjectDependencies = [
                 ":platform-kernel:observability-api"
         ] as Set,
         ":platform-kernel:notification-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:notification-core": [
+                ":platform-kernel:notification-api",
+                ":platform-kernel:audit-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":governance-kernel:project-environment-api": [

@@ -24,8 +24,17 @@ public record NotificationDelivery(
         if (status == NotificationDeliveryStatus.PENDING && (attempts != 0 || lastAttemptedAt != null)) {
             throw new IllegalArgumentException("pending delivery must not have attempts");
         }
+        if (status != NotificationDeliveryStatus.PENDING && (attempts < 1 || lastAttemptedAt == null)) {
+            throw new IllegalArgumentException("attempted delivery must include attempt details");
+        }
         if (status == NotificationDeliveryStatus.SUCCEEDED && providerReference.isEmpty()) {
             throw new IllegalArgumentException("successful delivery must have a providerReference");
+        }
+        if (status == NotificationDeliveryStatus.SUCCEEDED && !lastError.isEmpty()) {
+            throw new IllegalArgumentException("successful delivery must not have a lastError");
+        }
+        if (status == NotificationDeliveryStatus.FAILED && lastError.isEmpty()) {
+            throw new IllegalArgumentException("failed delivery must have a lastError");
         }
     }
 }
