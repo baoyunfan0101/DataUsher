@@ -9,6 +9,7 @@ import com.datausher.integration.scheduler.api.PublishedWorkflow;
 import com.datausher.integration.scheduler.api.SchedulerDependencyCondition;
 import com.datausher.integration.scheduler.api.SchedulerSchedule;
 import com.datausher.integration.scheduler.api.SchedulerScheduleType;
+import com.datausher.integration.scheduler.api.SchedulerScheduleStatus;
 import com.datausher.integration.scheduler.api.SchedulerTaskDefinition;
 import com.datausher.integration.scheduler.api.SchedulerTaskDependency;
 import com.datausher.integration.scheduler.api.SchedulerTaskType;
@@ -25,6 +26,7 @@ import com.datausher.workflow.api.WorkflowPublicationService;
 import com.datausher.workflow.api.WorkflowPublishedEvent;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowSchedule;
+import com.datausher.workflow.api.WorkflowRuntimeType;
 import com.datausher.workflow.api.WorkflowVersion;
 
 import java.time.Duration;
@@ -76,6 +78,15 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
         }
         WorkflowVersion version = workflows.findVersion(request.workflowId(), request.version())
                 .orElseThrow(() -> new IllegalArgumentException("workflow version does not exist"));
+        if (!version.specification().runtimeBinding().runtimeType()
+                .equals(WorkflowRuntimeType.SCHEDULER_MANAGED)) {
+            throw new IllegalStateException("only scheduler-managed workflows can be published");
+        }
+        if (!version.specification().runtimeBinding().adapterId().orElseThrow().equals(request.adapterId())
+                || !version.specification().runtimeBinding().bindingId().orElseThrow()
+                .equals(request.bindingId())) {
+            throw new IllegalArgumentException("publication must match workflow runtime binding");
+        }
         WorkflowSchedulerAdapter adapter = adapters.find(
                         request.adapterId(), WorkflowSchedulerAdapter.class)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -123,17 +134,19 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
                         dependency.upstreamTaskKey(), dependency.downstreamTaskKey(),
                         toSchedulerCondition(dependency.condition())))
                 .toList();
-        Optional<SchedulerSchedule> schedule = version.specification().schedule()
-                .map(this::toSchedulerSchedule);
+        var schedules = version.specification().schedules().stream()
+                .map(this::toSchedulerSchedule).toList();
         return new com.datausher.integration.scheduler.api.WorkflowDefinition(
                 request.bindingId(), version.workflowId().value(), version.version(),
-                request.idempotencyKey(), tasks, dependencies, schedule, version.specification().attributes());
+                request.idempotencyKey(), tasks, dependencies, schedules,
+                version.specification().attributes());
     }
 
     private SchedulerSchedule toSchedulerSchedule(WorkflowSchedule schedule) {
         return new SchedulerSchedule(
-                new SchedulerScheduleType(schedule.type().value()), schedule.expression(),
-                schedule.zoneId(), schedule.options());
+                schedule.scheduleId().value(), new SchedulerScheduleType(schedule.type().value()),
+                schedule.expression(), schedule.zoneId(),
+                SchedulerScheduleStatus.valueOf(schedule.status().name()), schedule.options());
     }
 
     private static SchedulerDependencyCondition toSchedulerCondition(TaskDependencyCondition condition) {

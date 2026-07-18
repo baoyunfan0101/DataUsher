@@ -14,7 +14,7 @@ public record WorkflowDefinition(
         String idempotencyKey,
         List<SchedulerTaskDefinition> tasks,
         List<SchedulerTaskDependency> dependencies,
-        Optional<SchedulerSchedule> schedule,
+        List<SchedulerSchedule> schedules,
         Map<String, String> options
 ) {
     public WorkflowDefinition {
@@ -23,7 +23,7 @@ public record WorkflowDefinition(
         idempotencyKey = IntegrationIdentifiers.requireText(idempotencyKey, "idempotencyKey");
         tasks = List.copyOf(tasks);
         dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
-        schedule = schedule == null ? Optional.empty() : schedule;
+        schedules = schedules == null ? List.of() : List.copyOf(schedules);
         options = options == null ? Map.of() : Map.copyOf(options);
         if (revision < 1) {
             throw new IllegalArgumentException("revision must be greater than zero");
@@ -41,5 +41,23 @@ public record WorkflowDefinition(
                 throw new IllegalArgumentException("dependency must reference defined tasks");
             }
         }
+        if (new HashSet<>(schedules.stream().map(SchedulerSchedule::scheduleId).toList()).size()
+                != schedules.size()) {
+            throw new IllegalArgumentException("schedule IDs must be unique");
+        }
+    }
+
+    public WorkflowDefinition(
+            String bindingId,
+            String workflowId,
+            long revision,
+            String idempotencyKey,
+            List<SchedulerTaskDefinition> tasks,
+            List<SchedulerTaskDependency> dependencies,
+            Optional<SchedulerSchedule> schedule,
+            Map<String, String> options
+    ) {
+        this(bindingId, workflowId, revision, idempotencyKey, tasks, dependencies,
+                schedule == null ? List.of() : schedule.stream().toList(), options);
     }
 }

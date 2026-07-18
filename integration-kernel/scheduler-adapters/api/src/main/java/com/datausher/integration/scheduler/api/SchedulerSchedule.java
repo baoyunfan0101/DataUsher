@@ -7,15 +7,19 @@ import java.util.Map;
 import java.util.Objects;
 
 public record SchedulerSchedule(
+        String scheduleId,
         SchedulerScheduleType type,
         String expression,
         ZoneId zoneId,
+        SchedulerScheduleStatus status,
         Map<String, String> options
 ) {
     public SchedulerSchedule {
+        scheduleId = IntegrationIdentifiers.normalize(scheduleId, "scheduleId");
         type = Objects.requireNonNull(type, "type must not be null");
         expression = IntegrationIdentifiers.requireText(expression, "expression");
         zoneId = Objects.requireNonNull(zoneId, "zoneId must not be null");
+        status = Objects.requireNonNull(status, "status must not be null");
         options = options == null ? Map.of() : Map.copyOf(options);
     }
 }

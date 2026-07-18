@@ -32,6 +32,7 @@ import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
+import com.datausher.workflow.api.WorkflowRuntimeBinding;
 import com.datausher.workflow.api.WorkflowVersion;
 import com.datausher.workflow.api.WorkflowVersionSpec;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,9 @@ class DefaultWorkflowPublicationServiceTest {
         WorkflowId workflowId = new WorkflowId("daily-orders");
         WorkflowVersion version = new WorkflowVersion(
                 workflowId, 1, new WorkflowVersionSpec(
-                        List.of(task("extract")), List.of(), Optional.empty(), Map.of()),
+                        List.of(task("extract")), List.of(), List.of(),
+                        WorkflowRuntimeBinding.schedulerManaged(
+                                "scheduler", "binding", Map.of()), Map.of()),
                 Instant.EPOCH, "system");
         WorkflowQueryService workflows = versions(version);
         var registry = new InMemoryAdapterRegistry();
