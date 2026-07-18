@@ -1,16 +1,11 @@
 package com.datausher.workflow.core;
 
-import com.datausher.execution.api.CancelExecutionRequest;
 import com.datausher.execution.api.ExecutionCommandService;
-import com.datausher.execution.api.ExecutionOrigin;
 import com.datausher.execution.api.ExecutionOriginType;
 import com.datausher.execution.api.ExecutionQueryService;
 import com.datausher.execution.api.ExecutionRequest;
-import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionStateChangedEvent;
-import com.datausher.execution.api.ExecutionWorkload;
-import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.event.DomainEventPublisher;
@@ -19,11 +14,11 @@ import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
 import com.datausher.workflow.api.CancelWorkflowRequest;
 import com.datausher.workflow.api.TaskDependency;
-import com.datausher.workflow.api.TaskDependencyCondition;
 import com.datausher.workflow.api.TaskInstance;
 import com.datausher.workflow.api.TaskInstanceId;
 import com.datausher.workflow.api.TaskInstanceQueryService;
 import com.datausher.workflow.api.TaskInstanceState;
+import com.datausher.workflow.api.TaskInstanceStateChangedEvent;
 import com.datausher.workflow.api.TriggerWorkflowRequest;
 import com.datausher.workflow.api.WorkflowInstance;
 import com.datausher.workflow.api.WorkflowInstanceId;
@@ -32,13 +27,14 @@ import com.datausher.workflow.api.WorkflowInstanceStateChangedEvent;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowRuntimeService;
+import com.datausher.workflow.api.WorkflowRuntimeType;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
+import com.datausher.workflow.api.WorkflowTaskRunReference;
 import com.datausher.workflow.api.WorkflowTriggeredEvent;
 import com.datausher.workflow.api.WorkflowVersion;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -50,11 +46,33 @@ public final class DefaultWorkflowRuntimeService
         implements WorkflowRuntimeService, TaskInstanceQueryService, WorkflowWorker {
     private final WorkflowQueryService workflows;
     private final WorkflowRuntimeStore store;
-    private final ExecutionCommandService executions;
-    private final ExecutionQueryService executionQueries;
+    private final WorkflowTaskExecutorRegistry taskExecutors;
+    private final TaskDependencyConditionRegistry conditionEvaluators;
+    private final TaskRetryStrategyRegistry retryStrategies;
     private final IdGenerator idGenerator;
     private final Clock clock;
     private final DomainEventPublisher eventPublisher;
+
+    public DefaultWorkflowRuntimeService(
+            WorkflowQueryService workflows,
+            WorkflowRuntimeStore store,
+            WorkflowTaskExecutorRegistry taskExecutors,
+            TaskDependencyConditionRegistry conditionEvaluators,
+            TaskRetryStrategyRegistry retryStrategies,
+            IdGenerator idGenerator,
+            Clock clock,
+            DomainEventPublisher eventPublisher
+    ) {
+        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
+        this.store = Objects.requireNonNull(store, "store must not be null");
+        this.taskExecutors = Objects.requireNonNull(taskExecutors, "taskExecutors must not be null");
+        this.conditionEvaluators = Objects.requireNonNull(
+                conditionEvaluators, "conditionEvaluators must not be null");
+        this.retryStrategies = Objects.requireNonNull(retryStrategies, "retryStrategies must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+    }
 
     public DefaultWorkflowRuntimeService(
             WorkflowQueryService workflows,
@@ -65,13 +83,12 @@ public final class DefaultWorkflowRuntimeService
             Clock clock,
             DomainEventPublisher eventPublisher
     ) {
-        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
-        this.store = Objects.requireNonNull(store, "store must not be null");
-        this.executions = Objects.requireNonNull(executions, "executions must not be null");
-        this.executionQueries = Objects.requireNonNull(executionQueries, "executionQueries must not be null");
-        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+        this(workflows, store,
+                new WorkflowTaskExecutorRegistry(List.of(
+                        new ExecutionWorkflowTaskExecutor(executions, executionQueries))),
+                TaskDependencyConditionRegistry.standard(),
+                TaskRetryStrategyRegistry.standard(),
+                idGenerator, clock, eventPublisher);
     }
 
     @Override
@@ -90,7 +107,8 @@ public final class DefaultWorkflowRuntimeService
                         Optional.empty(), Optional.empty(), Optional.empty(), now, now, Optional.empty(), 1))
                 .toList();
         WorkflowInstance instance = new WorkflowInstance(
-                instanceId, request.workflowId(), request.version(), request.idempotencyKey(),
+                instanceId, request.workflowId(), request.version(),
+                version.specification().runtimeBinding(), Optional.empty(), request.idempotencyKey(),
                 request.parameters(), WorkflowInstanceState.PENDING, now, now, Optional.empty(), 1);
         WorkflowRunCreateResult creation = store.createOrFind(
                 new StoredWorkflowRun(instance, tasks, request.requestContext()));
@@ -117,41 +135,94 @@ public final class DefaultWorkflowRuntimeService
         }
         WorkflowVersion version = requireVersion(
                 current.instance().workflowId(), current.instance().workflowVersion());
+        if (!current.instance().runtimeBinding().runtimeType()
+                .equals(WorkflowRuntimeType.PLATFORM_MANAGED)) {
+            throw new IllegalStateException("scheduler-managed workflow requires scheduler runtime worker");
+        }
         Map<String, WorkflowTaskDefinition> definitions = version.specification().tasks().stream()
                 .collect(Collectors.toMap(WorkflowTaskDefinition::taskKey, definition -> definition));
         Instant now = clock.now();
-        List<TaskInstance> promoted = current.tasks().stream()
+        StoredWorkflowRun active = expireTimedOut(
+                current, version, definitions, now, requestContext);
+        if (active.instance().state().terminal()) {
+            return active.instance();
+        }
+        List<TaskInstance> promoted = active.tasks().stream()
                 .map(task -> task.state() == TaskInstanceState.RETRY_WAIT
                         && !task.nextEligibleAt().orElseThrow().isAfter(now)
                         ? copyTask(task, TaskInstanceState.READY, task.attempt(), Optional.empty(),
-                        Optional.empty(), task.failureCode(), now, Optional.empty()) : task)
+                        Optional.empty(), Optional.empty(), task.failureCode(), now, Optional.empty()) : task)
                 .toList();
-        StoredWorkflowRun latest = promoted.equals(current.tasks()) ? current
-                : replaceRun(current, runningInstance(current.instance(), now), promoted, requestContext);
+        StoredWorkflowRun latest = promoted.equals(active.tasks()) ? active
+                : replaceRun(active, runningInstance(active.instance(), now), promoted, requestContext);
         for (TaskInstance task : List.copyOf(latest.tasks())) {
             if (task.state() != TaskInstanceState.READY) {
                 continue;
             }
             WorkflowTaskDefinition definition = definitions.get(task.taskKey());
-            ExecutionSpecification specification = withParameters(
-                    definition.executionSpecification(), latest.instance().parameters());
-            ExecutionRequest execution = executions.submit(new SubmitExecutionRequest(
-                    specification,
-                    executionKey(latest.instance(), task),
-                    new ExecutionOrigin(
-                            ExecutionOriginType.WORKFLOW_TASK, task.taskInstanceId().value(),
-                            Integer.toString(task.attempt()),
-                            Map.of("workflowInstanceId", latest.instance().instanceId().value(),
-                                    "taskKey", task.taskKey())),
-                    requestContext));
+            WorkflowTaskRunReference runReference = taskExecutors
+                    .require(definition.action().taskType())
+                    .dispatch(new WorkflowTaskDispatchRequest(
+                            latest.instance(), task, definition, requestContext));
+            Instant dispatchedAt = clock.now();
             TaskInstance queued = copyTask(
-                    task, TaskInstanceState.QUEUED, task.attempt(), Optional.of(execution.requestId()),
-                    Optional.empty(), Optional.empty(), clock.now(), Optional.empty());
+                    task, TaskInstanceState.QUEUED, task.attempt(), Optional.of(runReference),
+                    Optional.empty(), Optional.of(dispatchedAt.plus(definition.timeout())),
+                    Optional.empty(), dispatchedAt, Optional.empty());
             List<TaskInstance> updatedTasks = replaceTask(latest.tasks(), queued);
             latest = replaceRun(
                     latest, runningInstance(latest.instance(), clock.now()), updatedTasks, requestContext);
         }
         return latest.instance();
+    }
+
+    private StoredWorkflowRun expireTimedOut(
+            StoredWorkflowRun current,
+            WorkflowVersion version,
+            Map<String, WorkflowTaskDefinition> definitions,
+            Instant now,
+            RequestContext requestContext
+    ) {
+        List<TaskInstance> expired = current.tasks().stream()
+                .filter(task -> (task.state() == TaskInstanceState.QUEUED
+                        || task.state() == TaskInstanceState.RUNNING)
+                        && task.deadlineAt().filter(deadline -> !deadline.isAfter(now)).isPresent())
+                .toList();
+        if (expired.isEmpty()) {
+            return current;
+        }
+        List<TaskInstance> tasks = new ArrayList<>(current.tasks());
+        for (TaskInstance task : expired) {
+            WorkflowTaskDefinition definition = definitions.get(task.taskKey());
+            Optional<String> failureCode = Optional.of("task-timeout");
+            TaskInstance replacement;
+            if (retryable(definition, task, failureCode)) {
+                java.time.Duration delay = retryStrategies.delay(
+                        definition.retryPolicy().strategy(), task.attempt() + 1);
+                TaskInstanceState state = delay.isZero()
+                        ? TaskInstanceState.READY : TaskInstanceState.RETRY_WAIT;
+                replacement = copyTask(
+                        task, state, task.attempt() + 1, Optional.empty(),
+                        state == TaskInstanceState.RETRY_WAIT
+                                ? Optional.of(now.plus(delay)) : Optional.empty(),
+                        Optional.empty(), failureCode, now, Optional.empty());
+            } else {
+                replacement = copyTask(
+                        task, TaskInstanceState.TIMED_OUT, task.attempt(), task.runReference(),
+                        Optional.empty(), task.deadlineAt(), failureCode, now, Optional.of(now));
+            }
+            tasks = new ArrayList<>(replaceTask(tasks, replacement));
+        }
+        List<TaskInstance> advanced = advanceDependencies(List.copyOf(tasks), version, now);
+        WorkflowInstance instance = aggregate(current.instance(), advanced, now);
+        StoredWorkflowRun replacement = replaceRun(
+                current, instance, advanced, requestContext);
+        for (TaskInstance task : expired) {
+            WorkflowTaskDefinition definition = definitions.get(task.taskKey());
+            taskExecutors.require(definition.action().taskType()).cancel(
+                    new WorkflowTaskCancelRequest(task, definition, requestContext));
+        }
+        return replacement;
     }
 
     @Override
@@ -181,20 +252,24 @@ public final class DefaultWorkflowRuntimeService
         Instant now = event.occurredAt();
         Optional<String> failureCode = execution.failure().map(value -> value.code());
         TaskInstance updatedTask;
-        if ((state == TaskInstanceState.FAILED || state == TaskInstanceState.CANCELLED)
+        if ((state == TaskInstanceState.FAILED || state == TaskInstanceState.TIMED_OUT
+                || state == TaskInstanceState.CANCELLED)
                 && retryable(definition, task, failureCode)) {
-            Instant eligibleAt = now.plus(definition.retryPolicy().delay());
-            TaskInstanceState retryState = definition.retryPolicy().delay().isZero()
+            java.time.Duration retryDelay = retryStrategies.delay(
+                    definition.retryPolicy().strategy(), task.attempt() + 1);
+            Instant eligibleAt = now.plus(retryDelay);
+            TaskInstanceState retryState = retryDelay.isZero()
                     ? TaskInstanceState.READY : TaskInstanceState.RETRY_WAIT;
             updatedTask = copyTask(
                     task, retryState, task.attempt() + 1, Optional.empty(),
                     retryState == TaskInstanceState.RETRY_WAIT
                             ? Optional.of(eligibleAt) : Optional.empty(),
-                    failureCode, now, Optional.empty());
+                    Optional.empty(), failureCode, now, Optional.empty());
         } else {
             updatedTask = copyTask(
-                    task, state, task.attempt(), Optional.of(execution.requestId()), Optional.empty(),
-                    failureCode, now, state.terminal() ? Optional.of(now) : Optional.empty());
+                    task, state, task.attempt(), task.runReference(), Optional.empty(),
+                    task.deadlineAt(), failureCode, now,
+                    state.terminal() ? Optional.of(now) : Optional.empty());
         }
         List<TaskInstance> tasks = replaceTask(current.tasks(), updatedTask);
         tasks = advanceDependencies(tasks, version, now);
@@ -220,18 +295,24 @@ public final class DefaultWorkflowRuntimeService
         Instant now = clock.now();
         List<TaskInstance> tasks = current.tasks().stream()
                 .map(task -> task.state().terminal() ? task : copyTask(
-                        task, TaskInstanceState.CANCELLED, task.attempt(), task.executionRequestId(),
-                        Optional.empty(), task.failureCode(), now, Optional.of(now)))
+                        task, TaskInstanceState.CANCELLED, task.attempt(), task.runReference(),
+                        Optional.empty(), task.deadlineAt(), task.failureCode(), now, Optional.of(now)))
                 .toList();
         WorkflowInstance cancelled = copyInstance(
                 current.instance(), WorkflowInstanceState.CANCELLED, now, Optional.of(now));
         store.update(current, new StoredWorkflowRun(cancelled, tasks, current.requestContext()));
         publishStateChange(current.instance(), cancelled, request.requestContext(), now);
+        publishTaskStateChanges(current.tasks(), tasks, request.requestContext());
+        WorkflowVersion version = requireVersion(
+                current.instance().workflowId(), current.instance().workflowVersion());
+        Map<String, WorkflowTaskDefinition> definitions = version.specification().tasks().stream()
+                .collect(Collectors.toMap(WorkflowTaskDefinition::taskKey, definition -> definition));
         for (TaskInstance task : current.tasks()) {
-            task.executionRequestId().flatMap(executionQueries::findRequest)
-                    .filter(execution -> !execution.state().terminal())
-                    .ifPresent(execution -> executions.cancel(new CancelExecutionRequest(
-                            execution.requestId(), execution.revision(), request.requestContext())));
+            if (task.runReference().isPresent() && !task.state().terminal()) {
+                WorkflowTaskDefinition definition = definitions.get(task.taskKey());
+                taskExecutors.require(definition.action().taskType()).cancel(
+                        new WorkflowTaskCancelRequest(task, definition, request.requestContext()));
+            }
         }
         return cancelled;
     }
@@ -271,7 +352,25 @@ public final class DefaultWorkflowRuntimeService
         StoredWorkflowRun replacement = new StoredWorkflowRun(instance, tasks, current.requestContext());
         store.update(current, replacement);
         publishStateChange(current.instance(), instance, requestContext, instance.updatedAt());
+        publishTaskStateChanges(current.tasks(), tasks, requestContext);
         return replacement;
+    }
+
+    private void publishTaskStateChanges(
+            List<TaskInstance> previousTasks,
+            List<TaskInstance> currentTasks,
+            RequestContext requestContext
+    ) {
+        Map<TaskInstanceId, TaskInstance> previousById = previousTasks.stream()
+                .collect(Collectors.toMap(TaskInstance::taskInstanceId, task -> task));
+        for (TaskInstance current : currentTasks) {
+            TaskInstance previous = previousById.get(current.taskInstanceId());
+            if (previous != null && previous.state() != current.state()) {
+                eventPublisher.publish(new TaskInstanceStateChangedEvent(
+                        nextId("domain-event"), current.updatedAt(), requestContext,
+                        previous.state(), current));
+            }
+        }
     }
 
     private void publishStateChange(
@@ -308,10 +407,11 @@ public final class DefaultWorkflowRuntimeService
                     continue;
                 }
                 boolean satisfied = dependencies.stream().allMatch(value -> conditionSatisfied(
-                        value.condition(), byKey.get(value.upstreamTaskKey()).state()));
+                        value.condition(), byKey.get(value.upstreamTaskKey())));
                 TaskInstance advanced = copyTask(
                         task, satisfied ? TaskInstanceState.READY : TaskInstanceState.SKIPPED,
-                        task.attempt(), Optional.empty(), Optional.empty(), Optional.empty(), now,
+                        task.attempt(), Optional.empty(), Optional.empty(), Optional.empty(),
+                        Optional.empty(), now,
                         satisfied ? Optional.empty() : Optional.of(now));
                 result = new ArrayList<>(replaceTask(result, advanced));
                 changed = true;
@@ -320,17 +420,11 @@ public final class DefaultWorkflowRuntimeService
         return List.copyOf(result);
     }
 
-    private static boolean conditionSatisfied(TaskDependencyCondition condition, TaskInstanceState state) {
-        if (condition.equals(TaskDependencyCondition.ALWAYS)) {
-            return true;
-        }
-        if (condition.equals(TaskDependencyCondition.ON_SUCCESS)) {
-            return state == TaskInstanceState.SUCCEEDED;
-        }
-        if (condition.equals(TaskDependencyCondition.ON_FAILURE)) {
-            return state == TaskInstanceState.FAILED || state == TaskInstanceState.CANCELLED;
-        }
-        return false;
+    private boolean conditionSatisfied(
+            com.datausher.workflow.api.TaskDependencyCondition condition,
+            TaskInstance upstreamTask
+    ) {
+        return conditionEvaluators.satisfied(condition, upstreamTask);
     }
 
     private static boolean retryable(
@@ -353,16 +447,20 @@ public final class DefaultWorkflowRuntimeService
         if (!tasks.stream().allMatch(task -> task.state().terminal())) {
             return runningInstance(instance, now);
         }
-        WorkflowInstanceState state = tasks.stream().anyMatch(task ->
-                task.state() == TaskInstanceState.FAILED || task.state() == TaskInstanceState.CANCELLED)
-                ? WorkflowInstanceState.FAILED : WorkflowInstanceState.SUCCEEDED;
+        WorkflowInstanceState state;
+        if (tasks.stream().anyMatch(task -> task.state() == TaskInstanceState.TIMED_OUT)) {
+            state = WorkflowInstanceState.TIMED_OUT;
+        } else if (tasks.stream().anyMatch(task ->
+                task.state() == TaskInstanceState.FAILED || task.state() == TaskInstanceState.CANCELLED)) {
+            state = WorkflowInstanceState.FAILED;
+        } else {
+            state = WorkflowInstanceState.SUCCEEDED;
+        }
         return copyInstance(instance, state, now, Optional.of(now));
     }
 
     private static WorkflowInstance runningInstance(WorkflowInstance instance, Instant now) {
-        return instance.state() == WorkflowInstanceState.RUNNING
-                ? copyInstance(instance, WorkflowInstanceState.RUNNING, now, Optional.empty())
-                : copyInstance(instance, WorkflowInstanceState.RUNNING, now, Optional.empty());
+        return copyInstance(instance, WorkflowInstanceState.RUNNING, now, Optional.empty());
     }
 
     private static WorkflowInstance copyInstance(
@@ -373,6 +471,7 @@ public final class DefaultWorkflowRuntimeService
     ) {
         return new WorkflowInstance(
                 instance.instanceId(), instance.workflowId(), instance.workflowVersion(),
+                instance.runtimeBinding(), instance.runReference(),
                 instance.idempotencyKey(), instance.parameters(), state,
                 instance.createdAt(), now, finishedAt, instance.revision() + 1);
     }
@@ -381,15 +480,16 @@ public final class DefaultWorkflowRuntimeService
             TaskInstance task,
             TaskInstanceState state,
             int attempt,
-            Optional<com.datausher.execution.api.ExecutionRequestId> executionRequestId,
+            Optional<WorkflowTaskRunReference> runReference,
             Optional<Instant> nextEligibleAt,
+            Optional<Instant> deadlineAt,
             Optional<String> failureCode,
             Instant now,
             Optional<Instant> finishedAt
     ) {
         return new TaskInstance(
                 task.taskInstanceId(), task.workflowInstanceId(), task.taskKey(), attempt, state,
-                executionRequestId, nextEligibleAt, failureCode, task.createdAt(), now,
+                runReference, nextEligibleAt, deadlineAt, failureCode, task.createdAt(), now,
                 finishedAt, task.revision() + 1);
     }
 
@@ -409,27 +509,13 @@ public final class DefaultWorkflowRuntimeService
                 .findFirst().orElseThrow();
     }
 
-    private static ExecutionSpecification withParameters(
-            ExecutionSpecification specification,
-            Map<String, com.datausher.execution.api.ExecutionValue> workflowParameters
-    ) {
-        Map<String, com.datausher.execution.api.ExecutionValue> parameters =
-                new HashMap<>(specification.workload().parameters());
-        parameters.putAll(workflowParameters);
-        ExecutionWorkload workload = new ExecutionWorkload(
-                specification.workload().type(), specification.workload().payload(),
-                parameters, specification.workload().options());
-        return new ExecutionSpecification(
-                specification.queueId(), specification.accountId(), workload,
-                specification.resultMode(), specification.resultPageSize());
-    }
-
     private static TaskInstanceState mapState(ExecutionState state) {
         return switch (state) {
             case QUEUED, DISPATCHING -> TaskInstanceState.QUEUED;
             case RUNNING -> TaskInstanceState.RUNNING;
             case SUCCEEDED -> TaskInstanceState.SUCCEEDED;
-            case FAILED, TIMED_OUT -> TaskInstanceState.FAILED;
+            case FAILED -> TaskInstanceState.FAILED;
+            case TIMED_OUT -> TaskInstanceState.TIMED_OUT;
             case CANCELLED -> TaskInstanceState.CANCELLED;
             case PENDING -> null;
         };
@@ -449,7 +535,4 @@ public final class DefaultWorkflowRuntimeService
         return idGenerator.nextIdValue(IdGenerationRequest.of("workflow-core", type));
     }
 
-    private static String executionKey(WorkflowInstance instance, TaskInstance task) {
-        return instance.instanceId().value() + ":" + task.taskKey() + ":" + task.attempt();
-    }
 }
