@@ -35,6 +35,7 @@ import com.datausher.workflow.api.WorkflowTriggeredEvent;
 import com.datausher.workflow.api.WorkflowVersion;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -195,6 +196,40 @@ public final class DefaultWorkflowRuntimeService
                     latest, runningInstance(latest.instance(), clock.now()), updatedTasks, requestContext);
         }
         return latest.instance();
+    }
+
+    @Override
+    public List<WorkflowRunLease> claimRunnable(
+            String workerId,
+            Duration leaseDuration,
+            int limit
+    ) {
+        return store.claimRunnable(workerId, clock.now(), leaseDuration, limit);
+    }
+
+    @Override
+    public WorkflowInstance dispatchClaimed(
+            WorkflowRunLease lease,
+            RequestContext requestContext
+    ) {
+        Objects.requireNonNull(lease, "lease must not be null");
+        if (store.findClaimed(lease, clock.now()).isEmpty()) {
+            throw new WorkflowRunLeaseLostException(
+                    "workflow run lease is no longer owned: " + lease.instanceId().value());
+        }
+        return dispatchReady(lease.instanceId(), requestContext);
+    }
+
+    @Override
+    public WorkflowRunLease renew(WorkflowRunLease lease, Duration leaseDuration) {
+        return store.renew(
+                Objects.requireNonNull(lease, "lease must not be null"),
+                clock.now(), leaseDuration);
+    }
+
+    @Override
+    public void release(WorkflowRunLease lease) {
+        store.release(Objects.requireNonNull(lease, "lease must not be null"));
     }
 
     private StoredWorkflowRun dispatchSchedulerManaged(

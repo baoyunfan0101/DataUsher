@@ -220,6 +220,39 @@ class DefaultWorkflowRuntimeServiceTest {
                 service.listTaskInstances(triggered.instanceId()).getFirst().state());
     }
 
+    @Test
+    void reclaimsExpiredWorkflowLeasesAndRejectsStaleWorkers() {
+        WorkflowId workflowId = new WorkflowId("leased-workflow");
+        WorkflowVersion version = new WorkflowVersion(
+                workflowId, 1, new WorkflowVersionSpec(
+                        List.of(task("leased")), List.of(), Optional.empty(), Map.of()),
+                Instant.EPOCH, "system");
+        MutableClock clock = new MutableClock(Instant.EPOCH);
+        RecordingExecutions executions = new RecordingExecutions();
+        var service = new DefaultWorkflowRuntimeService(
+                versions(version), new InMemoryWorkflowRuntimeStore(), executions, executions,
+                new UuidIdGenerator(), clock, event -> { });
+        RequestContext context = RequestContext.system("request-lease", Instant.EPOCH);
+        service.trigger(new TriggerWorkflowRequest(
+                workflowId, 1, "leased-run", Map.of(), context));
+
+        WorkflowRunLease first = service.claimRunnable(
+                "worker-a", Duration.ofSeconds(1), 1).getFirst();
+        assertEquals(0, service.claimRunnable(
+                "worker-b", Duration.ofSeconds(1), 1).size());
+
+        clock.advance(Duration.ofSeconds(2));
+        WorkflowRunLease reclaimed = service.claimRunnable(
+                "worker-b", Duration.ofSeconds(5), 1).getFirst();
+
+        assertThrows(WorkflowRunLeaseLostException.class,
+                () -> service.dispatchClaimed(first, context));
+        service.dispatchClaimed(reclaimed, context);
+        assertEquals(1, executions.submitted.size());
+        WorkflowRunLease renewed = service.renew(reclaimed, Duration.ofSeconds(10));
+        service.release(renewed);
+    }
+
     private static ExecutionStateChangedEvent completed(
             ExecutionRequest request,
             RequestContext context
