@@ -278,7 +278,7 @@ public final class DefaultMetadataCatalogService implements
                 .collect(Collectors.toMap(TableMetadata::tableId, Function.identity()));
         List<MetadataSearchHit> hits = new ArrayList<>();
 
-        if (query.types().contains(MetadataAssetType.CATALOG)) {
+        if (query.includes(MetadataAssetType.CATALOG)) {
             catalogs.values().forEach(catalog -> addHit(
                     hits,
                     query,
@@ -291,7 +291,7 @@ public final class DefaultMetadataCatalogService implements
                     catalog.attributes()
             ));
         }
-        if (query.types().contains(MetadataAssetType.DATABASE)) {
+        if (query.includes(MetadataAssetType.DATABASE)) {
             databases.values().forEach(database -> {
                 CatalogMetadata catalog = catalogs.get(database.catalogId());
                 if (catalog != null) {
@@ -301,7 +301,7 @@ public final class DefaultMetadataCatalogService implements
                 }
             });
         }
-        if (query.types().contains(MetadataAssetType.TABLE)) {
+        if (query.includes(MetadataAssetType.TABLE)) {
             tables.values().forEach(table -> {
                 DatasourceId datasourceId = datasourceId(table.databaseId(), databases, catalogs);
                 if (datasourceId != null) {
@@ -310,7 +310,7 @@ public final class DefaultMetadataCatalogService implements
                 }
             });
         }
-        if (query.types().contains(MetadataAssetType.COLUMN)) {
+        if (query.includes(MetadataAssetType.COLUMN)) {
             store.listAllColumns().forEach(column -> {
                 TableMetadata table = tables.get(column.tableId());
                 DatasourceId datasourceId = table == null
@@ -395,7 +395,7 @@ public final class DefaultMetadataCatalogService implements
             DatasourceDiscoverySnapshot discovery,
             DiscoveredObjectKind kind
     ) {
-        return discovery.objects().stream().filter(object -> object.kind() == kind).toList();
+        return discovery.objects().stream().filter(object -> object.kind().equals(kind)).toList();
     }
 
     private static <T> T requireParent(
@@ -406,7 +406,7 @@ public final class DefaultMetadataCatalogService implements
         T parent = parents.get(object.parentExternalId());
         if (parent == null) {
             throw new IllegalArgumentException(
-                    "discovered " + object.kind().name().toLowerCase(Locale.ROOT)
+                    "discovered " + object.kind().value()
                             + " references an unknown " + parentType + ": "
                             + object.parentExternalId());
         }

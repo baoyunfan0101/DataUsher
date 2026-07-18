@@ -7,7 +7,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MetadataContractTest {
@@ -43,5 +46,15 @@ class MetadataContractTest {
                 MetadataSyncMode.REPLACE,
                 RequestContext.system("request-1", NOW)
         ));
+    }
+
+    @Test
+    void supportsFutureAssetAndTableTypesWithoutChangingTheContract() {
+        MetadataAssetType model = new MetadataAssetType("model");
+        TableKind materializedView = TableKind.fromExternalValue("MATERIALIZED VIEW");
+
+        assertEquals("model", model.value());
+        assertEquals("materialized-view", materializedView.value());
+        assertTrue(new MetadataSearchQuery("orders", null, Set.of()).includes(model));
     }
 }

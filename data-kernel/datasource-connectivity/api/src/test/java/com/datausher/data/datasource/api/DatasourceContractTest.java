@@ -32,6 +32,14 @@ class DatasourceContractTest {
         assertEquals("required", definition.connectionProperties().get("ssl.mode"));
     }
 
+    @Test
+    void preservesFutureDiscoveryKindsWithoutChangingTheContract() {
+        DiscoveredObjectKind topic = DiscoveredObjectKind.fromExternalKind("topic");
+
+        assertEquals(new DiscoveredObjectKind("topic"), topic);
+        assertEquals("topic", topic.value());
+    }
+
     private static DatasourceDefinition definition(Map<String, String> properties) {
         return new DatasourceDefinition(
                 new DatasourceId(" Analytics "),

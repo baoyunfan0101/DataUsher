@@ -204,7 +204,9 @@ public final class DefaultDatasourceService
                 ).stream()
                 .map(DefaultDatasourceService::toDiscoveredObject)
                 .sorted(Comparator
-                        .comparing(DiscoveredDatasourceObject::kind)
+                        .comparingInt((DiscoveredDatasourceObject object) ->
+                                discoveryKindOrder(object.kind()))
+                        .thenComparing(object -> object.kind().value())
                         .thenComparing(DiscoveredDatasourceObject::externalId))
                 .toList();
         DatasourceDiscoverySnapshot snapshot = new DatasourceDiscoverySnapshot(
@@ -269,6 +271,22 @@ public final class DefaultDatasourceService
                 DiscoveredObjectKind.fromExternalKind(object.kind()),
                 attributes
         );
+    }
+
+    private static int discoveryKindOrder(DiscoveredObjectKind kind) {
+        if (kind.equals(DiscoveredObjectKind.DATABASE)) {
+            return 0;
+        }
+        if (kind.equals(DiscoveredObjectKind.TABLE)) {
+            return 1;
+        }
+        if (kind.equals(DiscoveredObjectKind.COLUMN)) {
+            return 2;
+        }
+        if (kind.equals(DiscoveredObjectKind.PARTITION)) {
+            return 3;
+        }
+        return 4;
     }
 
     private void publish(

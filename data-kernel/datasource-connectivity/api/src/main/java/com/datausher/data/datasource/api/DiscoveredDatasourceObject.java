@@ -16,7 +16,7 @@ public record DiscoveredDatasourceObject(
         name = requireText(name, "name");
         kind = Objects.requireNonNull(kind, "kind must not be null");
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
-        if (kind != DiscoveredObjectKind.DATABASE && parentExternalId.isEmpty()) {
+        if (!kind.equals(DiscoveredObjectKind.DATABASE) && parentExternalId.isEmpty()) {
             throw new IllegalArgumentException(
                     "parentExternalId is required for non-database objects");
         }

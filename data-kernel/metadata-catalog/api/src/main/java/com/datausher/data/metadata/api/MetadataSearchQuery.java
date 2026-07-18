@@ -11,8 +11,10 @@ public record MetadataSearchQuery(
 ) {
     public MetadataSearchQuery {
         text = MetadataValues.requireText(text, "text");
-        types = types == null || types.isEmpty()
-                ? Set.of(MetadataAssetType.values())
-                : Set.copyOf(types);
+        types = types == null ? Set.of() : Set.copyOf(types);
+    }
+
+    public boolean includes(MetadataAssetType type) {
+        return types.isEmpty() || types.contains(type);
     }
 }

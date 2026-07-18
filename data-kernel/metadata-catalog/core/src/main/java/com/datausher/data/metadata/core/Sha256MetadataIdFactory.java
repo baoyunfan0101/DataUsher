@@ -25,10 +25,10 @@ public final class Sha256MetadataIdFactory implements MetadataIdFactory {
         if (normalizedExternalId.isEmpty()) {
             throw new IllegalArgumentException("externalId must not be blank");
         }
-        String canonical = assetType.name() + "\u0000" + datasourceId.value()
+        String canonical = assetType.value() + "\u0000" + datasourceId.value()
                 + "\u0000" + normalizedExternalId;
         return new MetadataId(
-                assetType.name().toLowerCase(Locale.ROOT)
+                assetType.value()
                         + "-" + HexFormat.of().formatHex(digest(canonical))
         );
     }
