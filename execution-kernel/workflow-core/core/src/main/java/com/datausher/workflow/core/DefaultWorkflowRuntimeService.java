@@ -13,6 +13,7 @@ import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
 import com.datausher.workflow.api.CancelWorkflowRequest;
+import com.datausher.workflow.api.ReportWorkflowTaskRunRequest;
 import com.datausher.workflow.api.TaskDependency;
 import com.datausher.workflow.api.TaskInstance;
 import com.datausher.workflow.api.TaskInstanceId;
@@ -45,7 +46,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class DefaultWorkflowRuntimeService
-        implements WorkflowRuntimeService, TaskInstanceQueryService, WorkflowWorker {
+        implements WorkflowRuntimeService, TaskInstanceQueryService, WorkflowWorker,
+        ExecutionWorkflowTaskEventHandler {
     private final WorkflowQueryService workflows;
     private final WorkflowRuntimeStore store;
     private final WorkflowTaskExecutorRegistry taskExecutors;
@@ -309,25 +311,54 @@ public final class DefaultWorkflowRuntimeService
         if (!execution.origin().type().equals(ExecutionOriginType.WORKFLOW_TASK)) {
             return;
         }
-        TaskInstanceId taskInstanceId = new TaskInstanceId(execution.origin().originId());
-        StoredWorkflowRun current = store.findByTaskInstanceId(taskInstanceId).orElse(null);
-        if (current == null || current.instance().state().terminal()) {
-            return;
-        }
-        TaskInstance task = findTask(current.tasks(), taskInstanceId);
-        if (!execution.origin().attemptKey().equals(Integer.toString(task.attempt()))) {
-            return;
-        }
         TaskInstanceState state = mapState(execution.state());
-        if (state == task.state() || state == null) {
+        if (state == null) {
             return;
+        }
+        int attempt;
+        try {
+            attempt = Integer.parseInt(execution.origin().attemptKey());
+        } catch (NumberFormatException invalidAttempt) {
+            return;
+        }
+        reportTaskRun(new ReportWorkflowTaskRunRequest(
+                new TaskInstanceId(execution.origin().originId()), attempt,
+                new WorkflowTaskRunReference(
+                        com.datausher.workflow.api.WorkflowTaskRunReferenceType.EXECUTION,
+                        execution.requestId().value(), Map.of()),
+                state, execution.failure().map(value -> value.code()),
+                event.occurredAt(), event.requestContext()));
+    }
+
+    @Override
+    public WorkflowInstance reportTaskRun(ReportWorkflowTaskRunRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        StoredWorkflowRun current = store.findByTaskInstanceId(request.taskInstanceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "workflow task instance does not exist"));
+        if (current.instance().state().terminal()) {
+            return current.instance();
+        }
+        TaskInstance task = findTask(current.tasks(), request.taskInstanceId());
+        if (request.attempt() != task.attempt()) {
+            return current.instance();
+        }
+        if (task.runReference().isEmpty()) {
+            throw new IllegalStateException("workflow task has not been dispatched");
+        }
+        if (!task.runReference().orElseThrow().equals(request.runReference())) {
+            throw new IllegalArgumentException("task run reference does not match active attempt");
+        }
+        TaskInstanceState state = request.state();
+        if (state == task.state() || task.state().terminal()) {
+            return current.instance();
         }
         WorkflowVersion version = requireVersion(
                 current.instance().workflowId(), current.instance().workflowVersion());
         WorkflowTaskDefinition definition = version.specification().tasks().stream()
                 .filter(candidate -> candidate.taskKey().equals(task.taskKey())).findFirst().orElseThrow();
-        Instant now = event.occurredAt();
-        Optional<String> failureCode = execution.failure().map(value -> value.code());
+        Instant now = request.observedAt();
+        Optional<String> failureCode = request.failureCode();
         TaskInstance updatedTask;
         if ((state == TaskInstanceState.FAILED || state == TaskInstanceState.TIMED_OUT
                 || state == TaskInstanceState.CANCELLED)
@@ -351,7 +382,7 @@ public final class DefaultWorkflowRuntimeService
         List<TaskInstance> tasks = replaceTask(current.tasks(), updatedTask);
         tasks = advanceDependencies(tasks, version, now);
         WorkflowInstance instance = aggregate(current.instance(), tasks, now);
-        replaceRun(current, instance, tasks, event.requestContext());
+        return replaceRun(current, instance, tasks, request.requestContext()).instance();
     }
 
     @Override

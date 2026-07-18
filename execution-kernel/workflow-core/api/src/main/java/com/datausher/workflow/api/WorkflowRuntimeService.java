@@ -1,7 +1,5 @@
 package com.datausher.workflow.api;
 
-import com.datausher.execution.api.ExecutionStateChangedEvent;
-
 import java.util.Optional;
 
 public interface WorkflowRuntimeService {
@@ -11,7 +9,7 @@ public interface WorkflowRuntimeService {
 
     WorkflowInstance refresh(WorkflowInstanceId instanceId, com.datausher.platform.shared.context.RequestContext context);
 
-    void handleExecutionStateChanged(ExecutionStateChangedEvent event);
+    WorkflowInstance reportTaskRun(ReportWorkflowTaskRunRequest request);
 
     Optional<WorkflowInstance> findInstance(WorkflowInstanceId instanceId);
 }

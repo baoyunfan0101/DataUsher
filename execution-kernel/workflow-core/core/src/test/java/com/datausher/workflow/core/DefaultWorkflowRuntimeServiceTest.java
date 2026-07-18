@@ -25,6 +25,7 @@ import com.datausher.platform.shared.page.PageResult;
 import com.datausher.platform.shared.time.core.SystemClock;
 import com.datausher.workflow.api.TaskDependency;
 import com.datausher.workflow.api.TaskDependencyCondition;
+import com.datausher.workflow.api.ReportWorkflowTaskRunRequest;
 import com.datausher.workflow.api.TaskInstanceState;
 import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.TriggerWorkflowRequest;
@@ -131,8 +132,16 @@ class DefaultWorkflowRuntimeServiceTest {
                 workflowId, 1, "custom-run", Map.of(), context));
         service.dispatchReady(instance.instanceId(), context);
 
-        assertEquals("custom-run", service.listTaskInstances(instance.instanceId()).getFirst()
-                .runReference().orElseThrow().type().value());
+        var dispatched = service.listTaskInstances(instance.instanceId()).getFirst();
+        assertEquals("custom-run", dispatched.runReference().orElseThrow().type().value());
+
+        service.reportTaskRun(new ReportWorkflowTaskRunRequest(
+                dispatched.taskInstanceId(), dispatched.attempt(),
+                dispatched.runReference().orElseThrow(), TaskInstanceState.SUCCEEDED,
+                Optional.empty(), Instant.now(), context));
+
+        assertEquals(WorkflowInstanceState.SUCCEEDED,
+                service.findInstance(instance.instanceId()).orElseThrow().state());
     }
 
     @Test
