@@ -6,4 +6,6 @@ public interface NotificationCommandService {
     NotificationDispatch send(SendNotificationRequest request);
 
     NotificationDispatch retry(RetryNotificationRequest request);
+
+    NotificationDispatch confirmDelivery(ConfirmNotificationDeliveryRequest request);
 }

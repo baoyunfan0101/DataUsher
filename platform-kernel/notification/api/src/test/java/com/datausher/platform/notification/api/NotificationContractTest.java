@@ -37,4 +37,21 @@ class NotificationContractTest {
                 List.of(route, route), Map.of(),
                 RequestContext.system("request-1", Instant.parse("2026-07-18T00:00:00Z"))));
     }
+
+    @Test
+    void deliveredOutcomeRequiresAnExplicitReceiptTime() {
+        NotificationRecipient recipient = new NotificationRecipient(
+                NotificationRecipientType.SUBJECT, "user:owner-1", Map.of());
+        NotificationChannel channel = new NotificationChannel("chat");
+        Instant attemptedAt = Instant.parse("2026-07-18T00:00:00Z");
+
+        NotificationDelivery accepted = new NotificationDelivery(
+                recipient, channel, NotificationDeliveryStatus.ACCEPTED,
+                1, attemptedAt, "message-1", null, "");
+
+        assertEquals(NotificationDeliveryStatus.ACCEPTED, accepted.status());
+        assertThrows(IllegalArgumentException.class, () -> new NotificationDelivery(
+                recipient, channel, NotificationDeliveryStatus.DELIVERED,
+                1, attemptedAt, "message-1", null, ""));
+    }
 }

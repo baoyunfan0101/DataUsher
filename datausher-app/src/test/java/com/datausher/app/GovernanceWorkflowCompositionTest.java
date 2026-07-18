@@ -101,7 +101,7 @@ class GovernanceWorkflowCompositionTest {
         };
         var notifications = new DefaultNotificationService(
                 new InMemoryNotificationStore(), new StrictNotificationTemplateRenderer(), List.of(provider),
-                ids, clock, auditedCommands, audit);
+                ids, clock, auditedCommands, audit, events);
         var callbacks = new DefaultApprovalCallbackRegistry(
                 new InMemoryApprovalCallbackStore(), clock, audit);
         var approvals = new DefaultApprovalService(
@@ -140,7 +140,7 @@ class GovernanceWorkflowCompositionTest {
                                 NotificationRecipientType.SUBJECT, owner.canonicalValue(), Map.of())),
                         Map.of("resource", invocation.targetResource().resourceId()),
                         invocation.approvalRequestId().value(), Map.of(), invocation.requestContext()));
-                assertEquals(NotificationDispatchStatus.SUCCEEDED, dispatch.status());
+                assertEquals(NotificationDispatchStatus.ACCEPTED, dispatch.status());
             }
         });
         ApprovalTemplateKey approvalTemplate = new ApprovalTemplateKey("workflow-publish");

@@ -9,9 +9,13 @@ import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.notification.api.NotificationChannel;
 import com.datausher.platform.notification.api.NotificationChannelProvider;
 import com.datausher.platform.notification.api.NotificationChannelResult;
+import com.datausher.platform.notification.api.ConfirmNotificationDeliveryRequest;
 import com.datausher.platform.notification.api.NotificationCommandService;
+import com.datausher.platform.notification.api.NotificationAcceptedEvent;
 import com.datausher.platform.notification.api.NotificationContent;
 import com.datausher.platform.notification.api.NotificationDelivery;
+import com.datausher.platform.notification.api.NotificationDeliveredEvent;
+import com.datausher.platform.notification.api.NotificationDeliveryFailedEvent;
 import com.datausher.platform.notification.api.NotificationDeliveryStatus;
 import com.datausher.platform.notification.api.NotificationDispatch;
 import com.datausher.platform.notification.api.NotificationDispatchId;
@@ -26,6 +30,7 @@ import com.datausher.platform.notification.api.PublishNotificationTemplateReques
 import com.datausher.platform.notification.api.RetryNotificationRequest;
 import com.datausher.platform.notification.api.SendNotificationRequest;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
@@ -58,6 +63,7 @@ public final class DefaultNotificationService implements NotificationCommandServ
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
     private final AuditCommandService audit;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultNotificationService(
             NotificationStore store,
@@ -66,7 +72,8 @@ public final class DefaultNotificationService implements NotificationCommandServ
             IdGenerator idGenerator,
             Clock clock,
             AuditedCommandExecutor commandExecutor,
-            AuditCommandService audit
+            AuditCommandService audit,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.renderer = Objects.requireNonNull(renderer, "renderer must not be null");
@@ -75,6 +82,7 @@ public final class DefaultNotificationService implements NotificationCommandServ
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor must not be null");
         this.audit = Objects.requireNonNull(audit, "audit must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -154,6 +162,23 @@ public final class DefaultNotificationService implements NotificationCommandServ
     }
 
     @Override
+    public NotificationDispatch confirmDelivery(ConfirmNotificationDeliveryRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        StoredNotificationDispatch initial = store.findDispatch(request.dispatchId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "notification dispatch does not exist: " + request.dispatchId()));
+        String dispatchId = initial.dispatch().dispatchId().value();
+        Object lock = dispatchLocks.computeIfAbsent(dispatchId, ignored -> new Object());
+        try {
+            synchronized (lock) {
+                return confirmDeliveryLocked(request);
+            }
+        } finally {
+            dispatchLocks.remove(dispatchId, lock);
+        }
+    }
+
+    @Override
     public Optional<NotificationTemplate> findTemplate(NotificationTemplateKey templateKey, long version) {
         return store.findTemplate(Objects.requireNonNull(templateKey, "templateKey must not be null"), version);
     }
@@ -196,7 +221,7 @@ public final class DefaultNotificationService implements NotificationCommandServ
             for (NotificationRoute route : template.routes()) {
                 NotificationDelivery delivery = new NotificationDelivery(
                         recipient, route.channel(), NotificationDeliveryStatus.PENDING,
-                        0, null, "", "");
+                        0, null, "", null, "");
                 deliveries.add(delivery);
                 contents.put(deliveryKey(recipient, route.channel()),
                         renderer.render(route.content(), request.parameters()));
@@ -230,7 +255,8 @@ public final class DefaultNotificationService implements NotificationCommandServ
         StoredNotificationDispatch current = store.findDispatch(initial.dispatch().dispatchId()).orElseThrow();
         for (int index = 0; index < current.dispatch().deliveries().size(); index++) {
             NotificationDelivery delivery = current.dispatch().deliveries().get(index);
-            if (delivery.status() == NotificationDeliveryStatus.SUCCEEDED) {
+            if (delivery.status() == NotificationDeliveryStatus.ACCEPTED
+                    || delivery.status() == NotificationDeliveryStatus.DELIVERED) {
                 continue;
             }
             NotificationDelivery attempted = deliver(current, delivery, context);
@@ -240,9 +266,11 @@ public final class DefaultNotificationService implements NotificationCommandServ
             StoredNotificationDispatch next = new StoredNotificationDispatch(
                     nextDispatch, current.requestFingerprint(), current.renderedContents());
             store.updateDispatch(current, next);
+            publishDeliveryEvent(next.dispatch().dispatchId(), attempted, context);
             current = next;
         }
-        AuditOutcome outcome = current.dispatch().status() == NotificationDispatchStatus.SUCCEEDED
+        AuditOutcome outcome = current.dispatch().status() == NotificationDispatchStatus.ACCEPTED
+                || current.dispatch().status() == NotificationDispatchStatus.DELIVERED
                 ? AuditOutcome.SUCCEEDED : AuditOutcome.FAILED;
         audit.record(dispatchAudit(context, "notification.dispatch.complete", current.dispatch(), outcome));
         return current;
@@ -267,37 +295,104 @@ public final class DefaultNotificationService implements NotificationCommandServ
                     delivery.recipient(), delivery.channel(), content, context)),
                     "notification provider result must not be null");
             return new NotificationDelivery(
-                    delivery.recipient(), delivery.channel(), NotificationDeliveryStatus.SUCCEEDED,
-                    attempts, attemptedAt, result.providerReference(), "");
+                    delivery.recipient(), delivery.channel(), NotificationDeliveryStatus.ACCEPTED,
+                    attempts, attemptedAt, result.providerReference(), null, "");
         } catch (RuntimeException exception) {
             return new NotificationDelivery(
                     delivery.recipient(), delivery.channel(), NotificationDeliveryStatus.FAILED,
-                    attempts, attemptedAt, "", safeError(exception));
+                    attempts, attemptedAt, "", null, safeError(exception));
         }
+    }
+
+    private NotificationDispatch confirmDeliveryLocked(ConfirmNotificationDeliveryRequest request) {
+        StoredNotificationDispatch current = store.findDispatch(request.dispatchId()).orElseThrow();
+        int matchIndex = -1;
+        for (int index = 0; index < current.dispatch().deliveries().size(); index++) {
+            NotificationDelivery delivery = current.dispatch().deliveries().get(index);
+            if (delivery.channel().equals(request.channel())
+                    && delivery.providerReference().equals(request.providerReference())) {
+                if (matchIndex >= 0) {
+                    throw new IllegalStateException("providerReference matches multiple notification deliveries");
+                }
+                matchIndex = index;
+            }
+        }
+        if (matchIndex < 0) {
+            throw new IllegalArgumentException("accepted notification delivery does not exist");
+        }
+        NotificationDelivery delivery = current.dispatch().deliveries().get(matchIndex);
+        if (delivery.status() == NotificationDeliveryStatus.DELIVERED) {
+            return current.dispatch();
+        }
+        if (delivery.status() != NotificationDeliveryStatus.ACCEPTED) {
+            throw new IllegalStateException("notification delivery has not been accepted");
+        }
+        NotificationDelivery delivered = new NotificationDelivery(
+                delivery.recipient(), delivery.channel(), NotificationDeliveryStatus.DELIVERED,
+                delivery.attempts(), delivery.lastAttemptedAt(), delivery.providerReference(),
+                request.deliveredAt(), "");
+        List<NotificationDelivery> nextDeliveries = new ArrayList<>(current.dispatch().deliveries());
+        nextDeliveries.set(matchIndex, delivered);
+        NotificationDispatch nextDispatch = withDeliveries(current.dispatch(), nextDeliveries);
+        StoredNotificationDispatch next = new StoredNotificationDispatch(
+                nextDispatch, current.requestFingerprint(), current.renderedContents());
+        store.updateDispatch(current, next);
+        audit.record(dispatchAudit(
+                request.requestContext(), "notification.delivery.confirm",
+                next.dispatch(), AuditOutcome.SUCCEEDED));
+        publishDeliveryEvent(next.dispatch().dispatchId(), delivered, request.requestContext());
+        return next.dispatch();
     }
 
     private NotificationDispatch withDeliveries(
             NotificationDispatch dispatch,
             List<NotificationDelivery> deliveries
     ) {
-        long succeeded = deliveries.stream()
-                .filter(delivery -> delivery.status() == NotificationDeliveryStatus.SUCCEEDED).count();
+        long accepted = deliveries.stream()
+                .filter(delivery -> delivery.status() == NotificationDeliveryStatus.ACCEPTED).count();
+        long delivered = deliveries.stream()
+                .filter(delivery -> delivery.status() == NotificationDeliveryStatus.DELIVERED).count();
         long pending = deliveries.stream()
                 .filter(delivery -> delivery.status() == NotificationDeliveryStatus.PENDING).count();
         NotificationDispatchStatus status;
         if (pending > 0) {
             status = NotificationDispatchStatus.PENDING;
-        } else if (succeeded == deliveries.size()) {
-            status = NotificationDispatchStatus.SUCCEEDED;
-        } else if (succeeded > 0) {
-            status = NotificationDispatchStatus.PARTIALLY_SUCCEEDED;
+        } else if (delivered == deliveries.size()) {
+            status = NotificationDispatchStatus.DELIVERED;
+        } else if (accepted + delivered == deliveries.size()) {
+            status = NotificationDispatchStatus.ACCEPTED;
+        } else if (delivered > 0) {
+            status = NotificationDispatchStatus.PARTIALLY_DELIVERED;
+        } else if (accepted > 0) {
+            status = NotificationDispatchStatus.PARTIALLY_ACCEPTED;
         } else {
             status = NotificationDispatchStatus.FAILED;
         }
+        Instant completedAt = dispatch.completedAt();
+        if (completedAt == null && status != NotificationDispatchStatus.PENDING) {
+            completedAt = clock.now();
+        }
         return new NotificationDispatch(
                 dispatch.dispatchId(), dispatch.templateKey(), dispatch.templateVersion(), dispatch.idempotencyKey(),
-                status, deliveries, dispatch.createdAt(),
-                status == NotificationDispatchStatus.PENDING ? null : clock.now(), dispatch.attributes());
+                status, deliveries, dispatch.createdAt(), completedAt, dispatch.attributes());
+    }
+
+    private void publishDeliveryEvent(
+            NotificationDispatchId dispatchId,
+            NotificationDelivery delivery,
+            RequestContext context
+    ) {
+        String eventId = idGenerator.nextIdValue(IdGenerationRequest.of("platform", "notification-event"));
+        Instant occurredAt = clock.now();
+        switch (delivery.status()) {
+            case ACCEPTED -> eventPublisher.publish(new NotificationAcceptedEvent(
+                    eventId, occurredAt, context, dispatchId, delivery));
+            case DELIVERED -> eventPublisher.publish(new NotificationDeliveredEvent(
+                    eventId, occurredAt, context, dispatchId, delivery));
+            case FAILED -> eventPublisher.publish(new NotificationDeliveryFailedEvent(
+                    eventId, occurredAt, context, dispatchId, delivery));
+            case PENDING -> throw new IllegalArgumentException("pending delivery cannot be published");
+        }
     }
 
     private static AuditRecordRequest dispatchAudit(

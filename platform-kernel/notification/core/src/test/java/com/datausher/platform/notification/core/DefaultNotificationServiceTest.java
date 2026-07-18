@@ -6,7 +6,12 @@ import com.datausher.platform.audit.core.InMemoryAuditEventStore;
 import com.datausher.platform.notification.api.NotificationChannel;
 import com.datausher.platform.notification.api.NotificationChannelProvider;
 import com.datausher.platform.notification.api.NotificationChannelResult;
+import com.datausher.platform.notification.api.ConfirmNotificationDeliveryRequest;
 import com.datausher.platform.notification.api.NotificationContent;
+import com.datausher.platform.notification.api.NotificationAcceptedEvent;
+import com.datausher.platform.notification.api.NotificationDeliveredEvent;
+import com.datausher.platform.notification.api.NotificationDeliveryFailedEvent;
+import com.datausher.platform.notification.api.NotificationDeliveryStatus;
 import com.datausher.platform.notification.api.NotificationDispatchStatus;
 import com.datausher.platform.notification.api.NotificationRecipient;
 import com.datausher.platform.notification.api.NotificationRecipientType;
@@ -16,11 +21,14 @@ import com.datausher.platform.notification.api.PublishNotificationTemplateReques
 import com.datausher.platform.notification.api.RetryNotificationRequest;
 import com.datausher.platform.notification.api.SendNotificationRequest;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEvent;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.time.core.SystemClock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,7 +58,8 @@ class DefaultNotificationServiceTest {
                 return new NotificationChannelResult("message-1", Map.of());
             }
         };
-        DefaultNotificationService service = service(provider);
+        List<DomainEvent> events = new ArrayList<>();
+        DefaultNotificationService service = service(provider, events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         NotificationTemplateKey key = new NotificationTemplateKey("approval-completed");
         service.publishTemplate(new PublishNotificationTemplateRequest(
@@ -65,8 +74,17 @@ class DefaultNotificationServiceTest {
         assertEquals(NotificationDispatchStatus.FAILED, dispatch.status());
 
         dispatch = service.retry(new RetryNotificationRequest(dispatch.dispatchId(), context));
-        assertEquals(NotificationDispatchStatus.SUCCEEDED, dispatch.status());
+        assertEquals(NotificationDispatchStatus.ACCEPTED, dispatch.status());
+        assertEquals(NotificationDeliveryStatus.ACCEPTED, dispatch.deliveries().get(0).status());
         assertEquals(2, attempts.get());
+
+        dispatch = service.confirmDelivery(new ConfirmNotificationDeliveryRequest(
+                dispatch.dispatchId(), channel, "message-1", Instant.now(), context));
+        assertEquals(NotificationDispatchStatus.DELIVERED, dispatch.status());
+        assertEquals(NotificationDeliveryStatus.DELIVERED, dispatch.deliveries().get(0).status());
+        assertEquals(NotificationDeliveryFailedEvent.class, events.get(0).getClass());
+        assertEquals(NotificationAcceptedEvent.class, events.get(1).getClass());
+        assertEquals(NotificationDeliveredEvent.class, events.get(2).getClass());
     }
 
     @Test
@@ -90,12 +108,20 @@ class DefaultNotificationServiceTest {
     }
 
     private static DefaultNotificationService service(NotificationChannelProvider provider) {
+        return service(provider, event -> {
+        });
+    }
+
+    private static DefaultNotificationService service(
+            NotificationChannelProvider provider,
+            DomainEventPublisher eventPublisher
+    ) {
         var clock = new SystemClock();
         var ids = new UuidIdGenerator();
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
         return new DefaultNotificationService(
                 new InMemoryNotificationStore(), new StrictNotificationTemplateRenderer(), List.of(provider),
-                ids, clock, new CompensatingAuditedCommandExecutor(audit), audit);
+                ids, clock, new CompensatingAuditedCommandExecutor(audit), audit, eventPublisher);
     }
 
     private record SuccessfulProvider(NotificationChannel channel) implements NotificationChannelProvider {
