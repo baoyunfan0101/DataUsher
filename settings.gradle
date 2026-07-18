@@ -31,6 +31,7 @@ include(
     "governance-kernel:resource-registry-core",
     "governance-kernel:identity-access-api",
     "governance-kernel:identity-access-core",
+    "governance-kernel:resource-ownership-api",
     "integration-kernel:integration-runtime-api",
     "integration-kernel:integration-runtime-core",
     "integration-kernel:datasource-adapters-api",
@@ -83,6 +84,8 @@ project(":governance-kernel:identity-access-api").projectDir =
         file("governance-kernel/identity-access/api")
 project(":governance-kernel:identity-access-core").projectDir =
         file("governance-kernel/identity-access/core")
+project(":governance-kernel:resource-ownership-api").projectDir =
+        file("governance-kernel/resource-ownership/api")
 project(":integration-kernel:integration-runtime-api").projectDir =
         file("integration-kernel/integration-runtime/api")
 project(":integration-kernel:integration-runtime-core").projectDir =

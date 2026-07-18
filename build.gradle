@@ -112,6 +112,14 @@ project(":governance-kernel:identity-access-core") {
     }
 }
 
+project(":governance-kernel:resource-ownership-api") {
+    dependencies {
+        api project(":governance-kernel:identity-access-api")
+        api project(":governance-kernel:resource-registry-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
 project(":integration-kernel:integration-runtime-core") {
     dependencies {
         api project(":integration-kernel:integration-runtime-api")
@@ -270,6 +278,7 @@ configure([
         project(":governance-kernel:resource-registry-core"),
         project(":governance-kernel:identity-access-api"),
         project(":governance-kernel:identity-access-core"),
+        project(":governance-kernel:resource-ownership-api"),
         project(":integration-kernel:integration-runtime-api"),
         project(":integration-kernel:integration-runtime-core"),
         project(":integration-kernel:datasource-adapters-api"),
@@ -352,6 +361,11 @@ def allowedProjectDependencies = [
                 ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:resource-ownership-api": [
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":integration-kernel:integration-runtime-api": [] as Set,
