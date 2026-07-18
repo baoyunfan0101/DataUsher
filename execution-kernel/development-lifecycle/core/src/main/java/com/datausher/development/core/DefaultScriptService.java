@@ -18,6 +18,7 @@ import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
@@ -91,7 +92,9 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
                 .orElseThrow(() -> new IllegalArgumentException(
                         "script does not exist: " + request.scriptId()));
         if (current.revision() != request.expectedRevision()) {
-            throw new IllegalStateException("script revision does not match expectedRevision");
+            throw new RevisionConflictException(
+                    "script", current.scriptId().value(),
+                    request.expectedRevision(), current.revision());
         }
         long versionNumber = current.latestVersion() + 1;
         Instant now = clock.now();

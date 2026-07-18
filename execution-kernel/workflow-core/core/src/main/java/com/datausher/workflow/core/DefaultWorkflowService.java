@@ -9,6 +9,7 @@ import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.shared.time.Clock;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
@@ -90,7 +91,9 @@ public final class DefaultWorkflowService implements WorkflowCommandService, Wor
                 .orElseThrow(() -> new IllegalArgumentException(
                         "workflow does not exist: " + request.workflowId()));
         if (current.revision() != request.expectedRevision()) {
-            throw new IllegalStateException("workflow revision does not match expectedRevision");
+            throw new RevisionConflictException(
+                    "workflow", current.workflowId().value(),
+                    request.expectedRevision(), current.revision());
         }
         long versionNumber = current.latestVersion() + 1;
         Instant now = clock.now();

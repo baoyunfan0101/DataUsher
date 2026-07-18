@@ -3,6 +3,7 @@ package com.datausher.workflow.core;
 import com.datausher.workflow.api.WorkflowDefinition;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowVersion;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,7 +36,13 @@ public final class InMemoryWorkflowStore implements WorkflowStore {
             WorkflowVersion version
     ) {
         if (!workflows.replace(expectedWorkflow.workflowId(), expectedWorkflow, updatedWorkflow)) {
-            throw new IllegalStateException("workflow changed concurrently: " + expectedWorkflow.workflowId());
+            WorkflowDefinition actual = workflows.get(expectedWorkflow.workflowId());
+            if (actual != null) {
+                throw new RevisionConflictException(
+                        "workflow", expectedWorkflow.workflowId().value(),
+                        expectedWorkflow.revision(), actual.revision());
+            }
+            throw new IllegalStateException("workflow no longer exists: " + expectedWorkflow.workflowId());
         }
         String key = versionKey(version.workflowId(), version.version());
         if (versions.putIfAbsent(key, version) != null) {

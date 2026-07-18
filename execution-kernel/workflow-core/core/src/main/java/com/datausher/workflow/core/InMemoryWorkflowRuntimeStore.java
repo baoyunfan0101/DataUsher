@@ -2,6 +2,7 @@ package com.datausher.workflow.core;
 
 import com.datausher.workflow.api.TaskInstanceId;
 import com.datausher.workflow.api.WorkflowInstanceId;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +44,13 @@ public final class InMemoryWorkflowRuntimeStore implements WorkflowRuntimeStore 
             throw new IllegalArgumentException("workflow instance IDs must match");
         }
         if (!runs.replace(expected.instance().instanceId(), expected, replacement)) {
-            throw new IllegalStateException("workflow instance changed concurrently");
+            StoredWorkflowRun actual = runs.get(expected.instance().instanceId());
+            if (actual != null) {
+                throw new RevisionConflictException(
+                        "workflow-instance", expected.instance().instanceId().value(),
+                        expected.instance().revision(), actual.instance().revision());
+            }
+            throw new IllegalStateException("workflow instance no longer exists");
         }
     }
 }

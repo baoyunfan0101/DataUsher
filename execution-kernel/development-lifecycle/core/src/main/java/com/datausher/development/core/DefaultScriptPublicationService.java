@@ -19,6 +19,7 @@ import com.datausher.governance.approval.api.SubmitApprovalRequest;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.time.Clock;
 import com.datausher.workflow.api.CreateWorkflowVersionRequest;
@@ -213,7 +214,7 @@ public final class DefaultScriptPublicationService
                     publication.workflowId(), workflow.revision(), specification,
                     invocation.requestContext()));
             completePublished(publication, published.version(), invocation.requestContext());
-        } catch (IllegalStateException concurrentChange) {
+        } catch (RevisionConflictException concurrentChange) {
             WorkflowVersion current = workflows.findLatestVersion(publication.workflowId()).orElseThrow();
             if (publicationMarker(current).equals(publication.publicationId().value())) {
                 completePublished(publication, current.version(), invocation.requestContext());

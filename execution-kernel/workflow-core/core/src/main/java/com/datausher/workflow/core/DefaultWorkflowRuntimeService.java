@@ -12,6 +12,7 @@ import com.datausher.execution.api.ExecutionStateChangedEvent;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
@@ -206,7 +207,9 @@ public final class DefaultWorkflowRuntimeService
         Objects.requireNonNull(request, "request must not be null");
         StoredWorkflowRun current = requireRun(request.instanceId());
         if (current.instance().revision() != request.expectedRevision()) {
-            throw new IllegalStateException("workflow revision does not match expectedRevision");
+            throw new RevisionConflictException(
+                    "workflow-instance", current.instance().instanceId().value(),
+                    request.expectedRevision(), current.instance().revision());
         }
         if (current.instance().state() == WorkflowInstanceState.CANCELLED) {
             return current.instance();

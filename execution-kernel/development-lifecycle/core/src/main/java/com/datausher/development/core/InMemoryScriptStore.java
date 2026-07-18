@@ -3,6 +3,7 @@ package com.datausher.development.core;
 import com.datausher.development.api.ScriptDefinition;
 import com.datausher.development.api.ScriptId;
 import com.datausher.development.api.ScriptVersion;
+import com.datausher.platform.shared.concurrent.RevisionConflictException;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,7 +36,13 @@ public final class InMemoryScriptStore implements ScriptStore {
             ScriptVersion version
     ) {
         if (!scripts.replace(expectedScript.scriptId(), expectedScript, updatedScript)) {
-            throw new IllegalStateException("script changed concurrently: " + expectedScript.scriptId());
+            ScriptDefinition actual = scripts.get(expectedScript.scriptId());
+            if (actual != null) {
+                throw new RevisionConflictException(
+                        "script", expectedScript.scriptId().value(),
+                        expectedScript.revision(), actual.revision());
+            }
+            throw new IllegalStateException("script no longer exists: " + expectedScript.scriptId());
         }
         String key = versionKey(version.scriptId(), version.version());
         if (versions.putIfAbsent(key, version) != null) {
