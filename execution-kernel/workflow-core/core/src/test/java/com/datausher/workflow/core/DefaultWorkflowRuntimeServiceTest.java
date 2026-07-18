@@ -32,6 +32,8 @@ import com.datausher.workflow.api.WorkflowDefinition;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowInstanceState;
 import com.datausher.workflow.api.WorkflowQueryService;
+import com.datausher.workflow.api.WorkflowRunReference;
+import com.datausher.workflow.api.WorkflowRuntimeBinding;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
 import com.datausher.workflow.api.WorkflowVersion;
 import com.datausher.workflow.api.WorkflowVersionSpec;
@@ -185,6 +187,39 @@ class DefaultWorkflowRuntimeServiceTest {
                 completed(executions.submitted.getFirst(), context)));
     }
 
+    @Test
+    void routesSchedulerManagedRunsThroughTheSchedulerGateway() {
+        WorkflowId workflowId = new WorkflowId("scheduler-workflow");
+        WorkflowVersion version = new WorkflowVersion(
+                workflowId, 1, new WorkflowVersionSpec(
+                        List.of(task("external")), List.of(), List.of(),
+                        WorkflowRuntimeBinding.schedulerManaged(
+                                "scheduler", "binding", Map.of()), Map.of()),
+                Instant.EPOCH, "system");
+        RecordingSchedulerGateway gateway = new RecordingSchedulerGateway();
+        var service = new DefaultWorkflowRuntimeService(
+                versions(version), new InMemoryWorkflowRuntimeStore(),
+                new WorkflowTaskExecutorRegistry(List.of()),
+                TaskDependencyConditionRegistry.standard(), TaskRetryStrategyRegistry.standard(),
+                gateway, new UuidIdGenerator(), new SystemClock(), event -> { });
+        RequestContext context = RequestContext.system("request-scheduler", Instant.now());
+        var triggered = service.trigger(new TriggerWorkflowRequest(
+                workflowId, 1, "scheduler-run", Map.of(), context));
+
+        var dispatched = service.dispatchReady(triggered.instanceId(), context);
+
+        assertEquals("external-run", dispatched.runReference().orElseThrow().externalRunId());
+        assertEquals(TaskInstanceState.QUEUED,
+                service.listTaskInstances(triggered.instanceId()).getFirst().state());
+        assertEquals(1, gateway.triggered);
+
+        var refreshed = service.refresh(triggered.instanceId(), context);
+
+        assertEquals(WorkflowInstanceState.SUCCEEDED, refreshed.state());
+        assertEquals(TaskInstanceState.SUCCEEDED,
+                service.listTaskInstances(triggered.instanceId()).getFirst().state());
+    }
+
     private static ExecutionStateChangedEvent completed(
             ExecutionRequest request,
             RequestContext context
@@ -212,6 +247,41 @@ class DefaultWorkflowRuntimeServiceTest {
     }
 
     private record FixtureAction(WorkflowTaskType taskType) implements WorkflowTaskAction {
+    }
+
+    private static final class RecordingSchedulerGateway
+            implements SchedulerManagedWorkflowGateway {
+        private int triggered;
+
+        @Override
+        public WorkflowRunReference trigger(
+                com.datausher.workflow.api.WorkflowInstance instance,
+                RequestContext requestContext
+        ) {
+            triggered++;
+            return new WorkflowRunReference(
+                    "scheduler", "binding", "external-run", Map.of());
+        }
+
+        @Override
+        public SchedulerManagedWorkflowObservation observe(
+                com.datausher.workflow.api.WorkflowInstance instance,
+                RequestContext requestContext
+        ) {
+            Instant now = Instant.now();
+            return new SchedulerManagedWorkflowObservation(
+                    Optional.of(WorkflowInstanceState.SUCCEEDED), now,
+                    List.of(new SchedulerManagedTaskObservation(
+                            "external", 1, TaskInstanceState.SUCCEEDED,
+                            Optional.empty(), Optional.of(now))));
+        }
+
+        @Override
+        public void cancel(
+                com.datausher.workflow.api.WorkflowInstance instance,
+                RequestContext requestContext
+        ) {
+        }
     }
 
     private static final class MutableClock implements com.datausher.platform.shared.time.Clock {

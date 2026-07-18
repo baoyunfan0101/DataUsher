@@ -26,6 +26,7 @@ import com.datausher.workflow.api.WorkflowInstanceState;
 import com.datausher.workflow.api.WorkflowInstanceStateChangedEvent;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
+import com.datausher.workflow.api.WorkflowRunReference;
 import com.datausher.workflow.api.WorkflowRuntimeService;
 import com.datausher.workflow.api.WorkflowRuntimeType;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
@@ -49,9 +50,34 @@ public final class DefaultWorkflowRuntimeService
     private final WorkflowTaskExecutorRegistry taskExecutors;
     private final TaskDependencyConditionRegistry conditionEvaluators;
     private final TaskRetryStrategyRegistry retryStrategies;
+    private final SchedulerManagedWorkflowGateway schedulerGateway;
     private final IdGenerator idGenerator;
     private final Clock clock;
     private final DomainEventPublisher eventPublisher;
+
+    public DefaultWorkflowRuntimeService(
+            WorkflowQueryService workflows,
+            WorkflowRuntimeStore store,
+            WorkflowTaskExecutorRegistry taskExecutors,
+            TaskDependencyConditionRegistry conditionEvaluators,
+            TaskRetryStrategyRegistry retryStrategies,
+            SchedulerManagedWorkflowGateway schedulerGateway,
+            IdGenerator idGenerator,
+            Clock clock,
+            DomainEventPublisher eventPublisher
+    ) {
+        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
+        this.store = Objects.requireNonNull(store, "store must not be null");
+        this.taskExecutors = Objects.requireNonNull(taskExecutors, "taskExecutors must not be null");
+        this.conditionEvaluators = Objects.requireNonNull(
+                conditionEvaluators, "conditionEvaluators must not be null");
+        this.retryStrategies = Objects.requireNonNull(retryStrategies, "retryStrategies must not be null");
+        this.schedulerGateway = Objects.requireNonNull(
+                schedulerGateway, "schedulerGateway must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+    }
 
     public DefaultWorkflowRuntimeService(
             WorkflowQueryService workflows,
@@ -63,15 +89,9 @@ public final class DefaultWorkflowRuntimeService
             Clock clock,
             DomainEventPublisher eventPublisher
     ) {
-        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
-        this.store = Objects.requireNonNull(store, "store must not be null");
-        this.taskExecutors = Objects.requireNonNull(taskExecutors, "taskExecutors must not be null");
-        this.conditionEvaluators = Objects.requireNonNull(
-                conditionEvaluators, "conditionEvaluators must not be null");
-        this.retryStrategies = Objects.requireNonNull(retryStrategies, "retryStrategies must not be null");
-        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+        this(workflows, store, taskExecutors, conditionEvaluators, retryStrategies,
+                SchedulerManagedWorkflowGateway.unsupported(),
+                idGenerator, clock, eventPublisher);
     }
 
     public DefaultWorkflowRuntimeService(
@@ -88,6 +108,7 @@ public final class DefaultWorkflowRuntimeService
                         new ExecutionWorkflowTaskExecutor(executions, executionQueries))),
                 TaskDependencyConditionRegistry.standard(),
                 TaskRetryStrategyRegistry.standard(),
+                SchedulerManagedWorkflowGateway.unsupported(),
                 idGenerator, clock, eventPublisher);
     }
 
@@ -135,9 +156,9 @@ public final class DefaultWorkflowRuntimeService
         }
         WorkflowVersion version = requireVersion(
                 current.instance().workflowId(), current.instance().workflowVersion());
-        if (!current.instance().runtimeBinding().runtimeType()
-                .equals(WorkflowRuntimeType.PLATFORM_MANAGED)) {
-            throw new IllegalStateException("scheduler-managed workflow requires scheduler runtime worker");
+        if (current.instance().runtimeBinding().runtimeType()
+                .equals(WorkflowRuntimeType.SCHEDULER_MANAGED)) {
+            return dispatchSchedulerManaged(current, requestContext).instance();
         }
         Map<String, WorkflowTaskDefinition> definitions = version.specification().tasks().stream()
                 .collect(Collectors.toMap(WorkflowTaskDefinition::taskKey, definition -> definition));
@@ -174,6 +195,27 @@ public final class DefaultWorkflowRuntimeService
                     latest, runningInstance(latest.instance(), clock.now()), updatedTasks, requestContext);
         }
         return latest.instance();
+    }
+
+    private StoredWorkflowRun dispatchSchedulerManaged(
+            StoredWorkflowRun current,
+            RequestContext requestContext
+    ) {
+        if (current.instance().runReference().isPresent()) {
+            return current;
+        }
+        WorkflowRunReference runReference = schedulerGateway.trigger(
+                current.instance(), requestContext);
+        Instant now = clock.now();
+        WorkflowInstance running = copyInstanceWithRunReference(
+                current.instance(), runReference, WorkflowInstanceState.RUNNING,
+                now, Optional.empty());
+        List<TaskInstance> queued = current.tasks().stream()
+                .map(task -> task.state().terminal() ? task : copyTask(
+                        task, TaskInstanceState.QUEUED, task.attempt(), Optional.empty(),
+                        Optional.empty(), Optional.empty(), Optional.empty(), now, Optional.empty()))
+                .toList();
+        return replaceRun(current, running, queued, requestContext);
     }
 
     private StoredWorkflowRun expireTimedOut(
@@ -287,6 +329,11 @@ public final class DefaultWorkflowRuntimeService
                     request.expectedRevision(), current.instance().revision());
         }
         if (current.instance().state() == WorkflowInstanceState.CANCELLED) {
+            if (current.instance().runtimeBinding().runtimeType()
+                    .equals(WorkflowRuntimeType.SCHEDULER_MANAGED)
+                    && current.instance().runReference().isPresent()) {
+                schedulerGateway.cancel(current.instance(), request.requestContext());
+            }
             return current.instance();
         }
         if (current.instance().state().terminal()) {
@@ -303,6 +350,13 @@ public final class DefaultWorkflowRuntimeService
         store.update(current, new StoredWorkflowRun(cancelled, tasks, current.requestContext()));
         publishStateChange(current.instance(), cancelled, request.requestContext(), now);
         publishTaskStateChanges(current.tasks(), tasks, request.requestContext());
+        if (current.instance().runtimeBinding().runtimeType()
+                .equals(WorkflowRuntimeType.SCHEDULER_MANAGED)) {
+            if (cancelled.runReference().isPresent()) {
+                schedulerGateway.cancel(cancelled, request.requestContext());
+            }
+            return cancelled;
+        }
         WorkflowVersion version = requireVersion(
                 current.instance().workflowId(), current.instance().workflowVersion());
         Map<String, WorkflowTaskDefinition> definitions = version.specification().tasks().stream()
@@ -320,7 +374,63 @@ public final class DefaultWorkflowRuntimeService
     @Override
     public WorkflowInstance refresh(WorkflowInstanceId instanceId, RequestContext requestContext) {
         Objects.requireNonNull(requestContext, "requestContext must not be null");
-        return requireRun(Objects.requireNonNull(instanceId, "instanceId must not be null")).instance();
+        StoredWorkflowRun current = requireRun(Objects.requireNonNull(
+                instanceId, "instanceId must not be null"));
+        if (!current.instance().runtimeBinding().runtimeType()
+                .equals(WorkflowRuntimeType.SCHEDULER_MANAGED)
+                || current.instance().runReference().isEmpty()) {
+            return current.instance();
+        }
+        if (current.instance().state() == WorkflowInstanceState.CANCELLED) {
+            schedulerGateway.cancel(current.instance(), requestContext);
+            return current.instance();
+        }
+        if (current.instance().state().terminal()) {
+            return current.instance();
+        }
+        return applySchedulerObservation(
+                current, schedulerGateway.observe(current.instance(), requestContext),
+                requestContext).instance();
+    }
+
+    private StoredWorkflowRun applySchedulerObservation(
+            StoredWorkflowRun current,
+            SchedulerManagedWorkflowObservation observation,
+            RequestContext requestContext
+    ) {
+        Map<String, TaskInstance> byKey = current.tasks().stream()
+                .collect(Collectors.toMap(TaskInstance::taskKey, task -> task));
+        List<TaskInstance> tasks = new ArrayList<>(current.tasks());
+        for (SchedulerManagedTaskObservation observedTask : observation.tasks()) {
+            TaskInstance task = byKey.get(observedTask.taskKey());
+            if (task == null) {
+                throw new IllegalStateException(
+                        "scheduler observed undefined workflow task: " + observedTask.taskKey());
+            }
+            if (observedTask.attempt() < task.attempt()
+                    || (observedTask.attempt() == task.attempt() && task.state().terminal())) {
+                continue;
+            }
+            if (observedTask.attempt() == task.attempt()
+                    && observedTask.state() == task.state()
+                    && observedTask.failureCode().equals(task.failureCode())
+                    && observedTask.finishedAt().equals(task.finishedAt())) {
+                continue;
+            }
+            TaskInstance replacement = copyTask(
+                    task, observedTask.state(), observedTask.attempt(), task.runReference(),
+                    Optional.empty(), Optional.empty(), observedTask.failureCode(),
+                    observation.observedAt(), observedTask.finishedAt());
+            tasks = new ArrayList<>(replaceTask(tasks, replacement));
+        }
+        WorkflowInstanceState state = observation.state().orElse(current.instance().state());
+        if (state == current.instance().state() && tasks.equals(current.tasks())) {
+            return current;
+        }
+        WorkflowInstance instance = copyInstance(
+                current.instance(), state, observation.observedAt(),
+                state.terminal() ? Optional.of(observation.observedAt()) : Optional.empty());
+        return replaceRun(current, instance, List.copyOf(tasks), requestContext);
     }
 
     @Override
@@ -472,6 +582,20 @@ public final class DefaultWorkflowRuntimeService
         return new WorkflowInstance(
                 instance.instanceId(), instance.workflowId(), instance.workflowVersion(),
                 instance.runtimeBinding(), instance.runReference(),
+                instance.idempotencyKey(), instance.parameters(), state,
+                instance.createdAt(), now, finishedAt, instance.revision() + 1);
+    }
+
+    private static WorkflowInstance copyInstanceWithRunReference(
+            WorkflowInstance instance,
+            WorkflowRunReference runReference,
+            WorkflowInstanceState state,
+            Instant now,
+            Optional<Instant> finishedAt
+    ) {
+        return new WorkflowInstance(
+                instance.instanceId(), instance.workflowId(), instance.workflowVersion(),
+                instance.runtimeBinding(), Optional.of(runReference),
                 instance.idempotencyKey(), instance.parameters(), state,
                 instance.createdAt(), now, finishedAt, instance.revision() + 1);
     }
