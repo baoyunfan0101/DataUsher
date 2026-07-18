@@ -161,6 +161,21 @@ project(":data-kernel:metadata-catalog-core") {
     }
 }
 
+project(":execution-kernel:execution-core-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":execution-kernel:execution-core-core") {
+    dependencies {
+        api project(":execution-kernel:execution-core-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        implementation project(":integration-kernel:compute-engine-adapters-api")
+        implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
 project(":adapters:datasource-mysql") {
     dependencies {
         api project(":integration-kernel:datasource-adapters-api")
@@ -235,6 +250,8 @@ configure([
         project(":data-kernel:datasource-connectivity-core"),
         project(":data-kernel:metadata-catalog-api"),
         project(":data-kernel:metadata-catalog-core"),
+        project(":execution-kernel:execution-core-api"),
+        project(":execution-kernel:execution-core-core"),
         project(":adapters:datasource-mysql"),
         project(":datausher-app")
 ]) {
@@ -342,6 +359,15 @@ def allowedProjectDependencies = [
         ":data-kernel:metadata-catalog-core": [
                 ":data-kernel:metadata-catalog-api",
                 ":data-kernel:datasource-connectivity-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":execution-kernel:execution-core-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":execution-kernel:execution-core-core": [
+                ":execution-kernel:execution-core-api",
+                ":integration-kernel:integration-runtime-api",
+                ":integration-kernel:compute-engine-adapters-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":adapters:datasource-mysql": [
