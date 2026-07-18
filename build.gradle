@@ -161,6 +161,14 @@ project(":data-kernel:metadata-catalog-core") {
     }
 }
 
+project(":adapters:datasource-mysql") {
+    dependencies {
+        api project(":integration-kernel:datasource-adapters-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        testImplementation project(":integration-kernel:adapter-contract-tests")
+    }
+}
+
 configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
@@ -225,6 +233,7 @@ configure([
         project(":data-kernel:datasource-connectivity-core"),
         project(":data-kernel:metadata-catalog-api"),
         project(":data-kernel:metadata-catalog-core"),
+        project(":adapters:datasource-mysql"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -332,6 +341,10 @@ def allowedProjectDependencies = [
                 ":data-kernel:metadata-catalog-api",
                 ":data-kernel:datasource-connectivity-api",
                 ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":adapters:datasource-mysql": [
+                ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:integration-runtime-api"
         ] as Set,
         ":datausher-app": [
                 ":platform-kernel:shared-types-core",

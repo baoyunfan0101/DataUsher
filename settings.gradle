@@ -42,6 +42,7 @@ include(
     "data-kernel:datasource-connectivity-core",
     "data-kernel:metadata-catalog-api",
     "data-kernel:metadata-catalog-core",
+    "adapters:datasource-mysql",
     "datausher-app"
 )
 
@@ -99,3 +100,5 @@ project(":data-kernel:metadata-catalog-api").projectDir =
         file("data-kernel/metadata-catalog/api")
 project(":data-kernel:metadata-catalog-core").projectDir =
         file("data-kernel/metadata-catalog/core")
+project(":adapters:datasource-mysql").projectDir =
+        file("adapters/datasource-mysql")
