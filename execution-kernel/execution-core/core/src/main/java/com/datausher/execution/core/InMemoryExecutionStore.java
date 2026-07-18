@@ -20,14 +20,22 @@ import java.util.Optional;
 
 public final class InMemoryExecutionStore implements ExecutionStore {
     private final Map<ExecutionRequestId, StoredExecution> executions = new HashMap<>();
+    private final Map<String, ExecutionRequestId> idempotencyIndex = new HashMap<>();
     private final Map<ExecutionInstanceId, StoredExecutionInstance> instances = new HashMap<>();
 
     @Override
-    public synchronized void create(StoredExecution execution) {
+    public synchronized ExecutionCreateResult create(StoredExecution execution) {
+        String idempotencyKey = execution.request().idempotencyKey();
+        ExecutionRequestId existingId = idempotencyIndex.get(idempotencyKey);
+        if (existingId != null) {
+            return new ExecutionCreateResult(executions.get(existingId), false);
+        }
         if (executions.putIfAbsent(execution.request().requestId(), execution) != null) {
             throw new IllegalStateException(
                     "execution request already exists: " + execution.request().requestId());
         }
+        idempotencyIndex.put(idempotencyKey, execution.request().requestId());
+        return new ExecutionCreateResult(execution, true);
     }
 
     @Override
@@ -128,6 +136,12 @@ public final class InMemoryExecutionStore implements ExecutionStore {
     }
 
     @Override
+    public synchronized Optional<StoredExecution> findByIdempotencyKey(String idempotencyKey) {
+        ExecutionRequestId requestId = idempotencyIndex.get(idempotencyKey);
+        return requestId == null ? Optional.empty() : Optional.ofNullable(executions.get(requestId));
+    }
+
+    @Override
     public synchronized Optional<StoredExecutionInstance> findInstance(
             ExecutionInstanceId instanceId
     ) {
@@ -188,8 +202,8 @@ public final class InMemoryExecutionStore implements ExecutionStore {
             Optional<com.datausher.execution.api.ExecutionFailure> failure
     ) {
         return new ExecutionRequest(
-                request.requestId(), request.queueId(), request.accountId(), request.workload(),
-                request.resultMode(), request.resultPageSize(), state, request.submittedAt(),
+                request.requestId(), request.specification(), request.idempotencyKey(), request.origin(),
+                state, request.submittedAt(),
                 changedAt, failure, request.revision() + 1);
     }
 }

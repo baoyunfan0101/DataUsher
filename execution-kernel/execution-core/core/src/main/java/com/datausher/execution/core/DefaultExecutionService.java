@@ -4,7 +4,6 @@ import com.datausher.execution.api.CancelExecutionRequest;
 import com.datausher.execution.api.ExecutionAccount;
 import com.datausher.execution.api.ExecutionAccountStatus;
 import com.datausher.execution.api.ExecutionCommandService;
-import com.datausher.execution.api.ExecutionEvents;
 import com.datausher.execution.api.ExecutionFailure;
 import com.datausher.execution.api.ExecutionInstance;
 import com.datausher.execution.api.ExecutionInstanceId;
@@ -23,6 +22,9 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionResultPage;
 import com.datausher.execution.api.ExecutionResultQueryService;
 import com.datausher.execution.api.ExecutionState;
+import com.datausher.execution.api.ExecutionStateChangedEvent;
+import com.datausher.execution.api.ExecutionSpecification;
+import com.datausher.execution.api.ExecutionSubmittedEvent;
 import com.datausher.execution.api.ReadExecutionLogRequest;
 import com.datausher.execution.api.ReadExecutionResultRequest;
 import com.datausher.execution.api.SubmitExecutionRequest;
@@ -40,7 +42,6 @@ import com.datausher.integration.runtime.api.AdapterRequestContext;
 import com.datausher.integration.runtime.api.IntegrationError;
 import com.datausher.integration.runtime.api.IntegrationErrorMapper;
 import com.datausher.platform.shared.context.RequestContext;
-import com.datausher.platform.shared.event.BaseDomainEvent;
 import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
@@ -107,27 +108,46 @@ public final class DefaultExecutionService
     @Override
     public ExecutionRequest submit(SubmitExecutionRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        requireActiveQueue(request.queueId());
-        ExecutionAccount account = requireActiveAccount(request.accountId());
-        requireSupportedWorkload(account, request.workload().type());
+        Optional<StoredExecution> existing = executionStore.findByIdempotencyKey(request.idempotencyKey());
+        if (existing.isPresent()) {
+            ExecutionRequest previous = existing.orElseThrow().request();
+            if (!previous.specification().equals(request.specification())
+                    || !previous.origin().equals(request.origin())) {
+                throw new IllegalStateException(
+                        "idempotency key was used for a different execution request");
+            }
+            return previous;
+        }
+        ExecutionSpecification specification = request.specification();
+        requireActiveQueue(specification.queueId());
+        ExecutionAccount account = requireActiveAccount(specification.accountId());
+        requireSupportedWorkload(account, specification.workload().type());
         requireAdapter(account);
         Instant now = clock.now();
         ExecutionRequest execution = new ExecutionRequest(
                 new ExecutionRequestId(nextId("execution-request")),
-                request.queueId(),
-                request.accountId(),
-                request.workload(),
-                request.resultMode(),
-                request.resultPageSize(),
+                specification,
+                request.idempotencyKey(),
+                request.origin(),
                 ExecutionState.QUEUED,
                 now,
                 now,
                 Optional.empty(),
                 1
         );
-        executionStore.create(new StoredExecution(execution, request.requestContext()));
-        publish(ExecutionEvents.SUBMITTED, request.requestContext(), now);
-        publish(ExecutionEvents.QUEUED, request.requestContext(), now);
+        ExecutionCreateResult creation = executionStore.create(
+                new StoredExecution(execution, request.requestContext()));
+        if (!creation.created()) {
+            ExecutionRequest concurrent = creation.execution().request();
+            if (!concurrent.specification().equals(request.specification())
+                    || !concurrent.origin().equals(request.origin())) {
+                throw new IllegalStateException(
+                        "idempotency key was used for a different execution request");
+            }
+            return concurrent;
+        }
+        publishSubmitted(execution, request.requestContext(), now);
+        publishState(execution, Optional.empty(), request.requestContext(), now);
         return execution;
     }
 
@@ -147,6 +167,7 @@ public final class DefaultExecutionService
                     "terminal execution cannot be cancelled: " + request.requestId());
         }
         Optional<StoredExecutionInstance> latest = latestInstance(request.requestId());
+        Optional<ExecutionInstance> cancelledInstance = Optional.empty();
         Instant now = clock.now();
         StoredExecution cancelled = transition(
                 execution, ExecutionState.CANCELLED, now, Optional.empty());
@@ -156,12 +177,13 @@ public final class DefaultExecutionService
             StoredExecutionInstance currentInstance = latest.get();
             currentInstance.handle().ifPresent(handle -> cancelExternal(
                     execution, account(execution.request()), handle, request.requestContext()));
-            StoredExecutionInstance cancelledInstance = transition(
+            StoredExecutionInstance cancelledStoredInstance = transition(
                     currentInstance, ExecutionState.CANCELLED, now, Optional.empty(),
                     currentInstance.handle());
-            executionStore.update(execution, cancelled, currentInstance, cancelledInstance);
+            executionStore.update(execution, cancelled, currentInstance, cancelledStoredInstance);
+            cancelledInstance = Optional.of(cancelledStoredInstance.instance());
         }
-        publish(ExecutionEvents.CANCELLED, request.requestContext(), now);
+        publishState(cancelled.request(), cancelledInstance, request.requestContext(), now);
         return cancelled.request();
     }
 
@@ -211,7 +233,7 @@ public final class DefaultExecutionService
                     latestInstance, ExecutionState.RUNNING, startedAt, Optional.empty(),
                     Optional.of(handle));
             executionStore.update(latest, running, latestInstance, runningInstance);
-            publish(ExecutionEvents.STARTED, requestContext, startedAt);
+            publishState(running.request(), Optional.of(runningInstance.instance()), requestContext, startedAt);
             return Optional.of(runningInstance.instance());
         } catch (RuntimeException failure) {
             return Optional.of(failDispatch(dispatch, account, failure, requestContext));
@@ -258,7 +280,8 @@ public final class DefaultExecutionService
                     storedInstance, nextState, changedAt, statusFailure, Optional.of(handle));
             executionStore.update(
                     execution, updatedExecution, storedInstance, updatedInstance);
-            publish(eventFor(nextState), requestContext, changedAt);
+            publishState(updatedExecution.request(), Optional.of(updatedInstance.instance()),
+                    requestContext, changedAt);
             return updatedInstance.instance();
         } catch (RuntimeException failure) {
             return fail(execution, storedInstance, account, failure, requestContext);
@@ -395,7 +418,8 @@ public final class DefaultExecutionService
         StoredExecutionInstance failedInstance = transition(
                 instance, state, failedAt, Optional.of(executionFailure), instance.handle());
         executionStore.update(execution, failedExecution, instance, failedInstance);
-        publish(eventFor(state), requestContext, failedAt);
+        publishState(failedExecution.request(), Optional.of(failedInstance.instance()),
+                requestContext, failedAt);
         return failedInstance.instance();
     }
 
@@ -560,19 +584,6 @@ public final class DefaultExecutionService
         };
     }
 
-    private static String eventFor(ExecutionState state) {
-        return switch (state) {
-            case SUCCEEDED -> ExecutionEvents.COMPLETED;
-            case FAILED -> ExecutionEvents.FAILED;
-            case CANCELLED -> ExecutionEvents.CANCELLED;
-            case TIMED_OUT -> ExecutionEvents.TIMED_OUT;
-            case RUNNING -> ExecutionEvents.STARTED;
-            case QUEUED -> ExecutionEvents.QUEUED;
-            case PENDING, DISPATCHING -> throw new IllegalArgumentException(
-                    "state has no public lifecycle event: " + state);
-        };
-    }
-
     private static void validateHandle(
             ComputeJobHandle handle,
             ExecutionAccount account,
@@ -636,9 +647,23 @@ public final class DefaultExecutionService
         }
     }
 
-    private void publish(String eventType, RequestContext context, Instant occurredAt) {
-        eventPublisher.publish(new BaseDomainEvent(
-                nextId("domain-event"), eventType, SOURCE_MODULE, occurredAt, context));
+    private void publishSubmitted(
+            ExecutionRequest request,
+            RequestContext context,
+            Instant occurredAt
+    ) {
+        eventPublisher.publish(new ExecutionSubmittedEvent(
+                nextId("domain-event"), occurredAt, context, request));
+    }
+
+    private void publishState(
+            ExecutionRequest request,
+            Optional<ExecutionInstance> instance,
+            RequestContext context,
+            Instant occurredAt
+    ) {
+        eventPublisher.publish(new ExecutionStateChangedEvent(
+                nextId("domain-event"), occurredAt, context, request, instance));
     }
 
     private String nextId(String entityType) {

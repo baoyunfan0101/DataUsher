@@ -9,6 +9,9 @@
 - Route adapter calls through `AdapterInvocationExecutor` to enforce request deadlines.
 - Model compute work as managed jobs: submit once, retain the opaque handle, and
   use capability-gated status, cancellation, log, result, and explain operations.
+- Publish scheduler workflows with portable task, dependency, and schedule contracts.
+- Preserve trigger idempotency keys in scheduler run handles.
+- Observe scheduler task runs through the paged task-run contract.
 - Concrete adapters must propagate interruption to vendor calls when cancellation is supported.
 - Declare supported operations with the module capability constants and register adapters through `AdapterRegistry`.
 - Pass only `IntegrationValue` across dynamic data boundaries.

@@ -3,6 +3,8 @@ package com.datausher.app;
 import com.datausher.execution.api.CreateExecutionQueueRequest;
 import com.datausher.execution.api.ExecutionAccountId;
 import com.datausher.execution.api.ExecutionResultMode;
+import com.datausher.execution.api.ExecutionSpecification;
+import com.datausher.execution.api.ExecutionOrigin;
 import com.datausher.execution.api.ExecutionState;
 import com.datausher.execution.api.ExecutionValue;
 import com.datausher.execution.api.ReadExecutionResultRequest;
@@ -86,8 +88,12 @@ class ExecutionServiceCompositionTest {
             );
 
             service.submit(new SubmitExecutionRequest(
-                    queue.queueId(), account.accountId(), workload,
-                    ExecutionResultMode.PAGED, 100, context));
+                    new ExecutionSpecification(
+                            queue.queueId(), account.accountId(), workload,
+                            ExecutionResultMode.PAGED, 100),
+                    "composition-execution-1",
+                    ExecutionOrigin.direct("composition-execution-1"),
+                    context));
             var instance = service.dispatchNext(queue.queueId(), context).orElseThrow();
             instance = awaitTerminal(service, instance, context);
             var result = service.read(new ReadExecutionResultRequest(

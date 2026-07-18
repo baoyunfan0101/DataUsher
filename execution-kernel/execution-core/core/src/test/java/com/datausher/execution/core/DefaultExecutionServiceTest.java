@@ -7,6 +7,10 @@ import com.datausher.execution.api.ExecutionQuery;
 import com.datausher.execution.api.ExecutionQueueId;
 import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionState;
+import com.datausher.execution.api.ExecutionSpecification;
+import com.datausher.execution.api.ExecutionOrigin;
+import com.datausher.execution.api.ExecutionStateChangedEvent;
+import com.datausher.execution.api.ExecutionSubmittedEvent;
 import com.datausher.execution.api.ExecutionValue;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
@@ -52,6 +56,7 @@ import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DefaultExecutionServiceTest {
     @Test
@@ -76,6 +81,9 @@ class DefaultExecutionServiceTest {
         assertTrue(fixture.events.stream()
                 .map(DomainEvent::eventType)
                 .anyMatch("ExecutionCompleted"::equals));
+        assertEquals(ExecutionSubmittedEvent.class, fixture.events.get(0).getClass());
+        assertTrue(fixture.events.stream().skip(1)
+                .allMatch(ExecutionStateChangedEvent.class::isInstance));
     }
 
     @Test
@@ -115,6 +123,25 @@ class DefaultExecutionServiceTest {
         assertEquals(new ExecutionValue.DecimalValue(1), result.rows().getFirst().getFirst());
     }
 
+    @Test
+    void submitsIdempotentlyAndRejectsConflictingReuse() {
+        Fixture fixture = new Fixture(1);
+        SubmitExecutionRequest submission = fixture.submission("select 1");
+
+        var first = fixture.service.submit(submission);
+        var duplicate = fixture.service.submit(submission);
+
+        assertEquals(first.requestId(), duplicate.requestId());
+        assertThrows(IllegalStateException.class, () -> fixture.service.submit(
+                new SubmitExecutionRequest(
+                        new ExecutionSpecification(
+                                fixture.queueId, fixture.accountId,
+                                new ExecutionWorkload(
+                                        new ExecutionWorkloadType("fixture"), "select 2", Map.of(), Map.of()),
+                                ExecutionResultMode.PAGED, 100),
+                        submission.idempotencyKey(), submission.origin(), fixture.context)));
+    }
+
     private static final class Fixture {
         private final SystemClock clock = new SystemClock();
         private final RequestContext context = RequestContext.system("request-1", clock.now());
@@ -151,16 +178,19 @@ class DefaultExecutionServiceTest {
 
         private SubmitExecutionRequest submission(String payload) {
             return new SubmitExecutionRequest(
-                    queueId,
-                    accountId,
-                    new ExecutionWorkload(
-                            new ExecutionWorkloadType("fixture"),
-                            payload,
-                            Map.of("limit", new ExecutionValue.DecimalValue(1)),
-                            Map.of()
-                    ),
-                    ExecutionResultMode.PAGED,
-                    100,
+                    new ExecutionSpecification(
+                            queueId,
+                            accountId,
+                            new ExecutionWorkload(
+                                    new ExecutionWorkloadType("fixture"),
+                                    payload,
+                                    Map.of("limit", new ExecutionValue.DecimalValue(1)),
+                                    Map.of()
+                            ),
+                            ExecutionResultMode.PAGED,
+                            100),
+                    "fixture:" + payload,
+                    ExecutionOrigin.direct("fixture:" + payload),
                     context
             );
         }

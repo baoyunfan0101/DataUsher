@@ -6,6 +6,7 @@ public record PublishedWorkflow(
         String adapterId,
         String bindingId,
         String workflowId,
+        String idempotencyKey,
         String externalWorkflowId,
         long revision
 ) {
@@ -13,6 +14,7 @@ public record PublishedWorkflow(
         adapterId = IntegrationIdentifiers.normalize(adapterId, "adapterId");
         bindingId = IntegrationIdentifiers.normalize(bindingId, "bindingId");
         workflowId = IntegrationIdentifiers.normalize(workflowId, "workflowId");
+        idempotencyKey = IntegrationIdentifiers.requireText(idempotencyKey, "idempotencyKey");
         externalWorkflowId = IntegrationIdentifiers.requireText(
                 externalWorkflowId, "externalWorkflowId");
         if (revision < 1) {

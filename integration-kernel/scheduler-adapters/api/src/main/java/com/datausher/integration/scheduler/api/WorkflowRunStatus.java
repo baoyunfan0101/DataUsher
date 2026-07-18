@@ -22,6 +22,7 @@ public record WorkflowRunStatus(
     public boolean terminal() {
         return state == WorkflowRunState.SUCCEEDED
                 || state == WorkflowRunState.FAILED
-                || state == WorkflowRunState.CANCELLED;
+                || state == WorkflowRunState.CANCELLED
+                || state == WorkflowRunState.TIMED_OUT;
     }
 }

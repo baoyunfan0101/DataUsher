@@ -12,5 +12,12 @@ public interface WorkflowSchedulerAdapter extends IntegrationAdapter {
 
     WorkflowRunStatus status(AdapterRequestContext context, WorkflowRunHandle handle);
 
+    WorkflowTaskRunPage readTaskRuns(
+            AdapterRequestContext context,
+            WorkflowRunHandle handle,
+            String cursor,
+            int limit
+    );
+
     void cancel(AdapterRequestContext context, WorkflowRunHandle handle);
 }

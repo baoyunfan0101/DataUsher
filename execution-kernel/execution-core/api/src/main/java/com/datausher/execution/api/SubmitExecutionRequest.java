@@ -5,21 +5,18 @@ import com.datausher.platform.shared.context.RequestContext;
 import java.util.Objects;
 
 public record SubmitExecutionRequest(
-        ExecutionQueueId queueId,
-        ExecutionAccountId accountId,
-        ExecutionWorkload workload,
-        ExecutionResultMode resultMode,
-        int resultPageSize,
+        ExecutionSpecification specification,
+        String idempotencyKey,
+        ExecutionOrigin origin,
         RequestContext requestContext
 ) {
     public SubmitExecutionRequest {
-        queueId = Objects.requireNonNull(queueId, "queueId must not be null");
-        accountId = Objects.requireNonNull(accountId, "accountId must not be null");
-        workload = Objects.requireNonNull(workload, "workload must not be null");
-        resultMode = Objects.requireNonNull(resultMode, "resultMode must not be null");
+        specification = Objects.requireNonNull(specification, "specification must not be null");
+        idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null").trim();
+        origin = Objects.requireNonNull(origin, "origin must not be null");
         requestContext = Objects.requireNonNull(requestContext, "requestContext must not be null");
-        if (resultPageSize < 1) {
-            throw new IllegalArgumentException("resultPageSize must be greater than zero");
+        if (idempotencyKey.isEmpty()) {
+            throw new IllegalArgumentException("idempotencyKey must not be blank");
         }
     }
 }

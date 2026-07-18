@@ -35,6 +35,10 @@ calls `ExecutionWorker.refresh` until the instance reaches a terminal state.
 
 - Add a new workload with a new `ExecutionWorkloadType`; do not add a parallel
   execution lifecycle for each language or engine.
+- Reuse `ExecutionSpecification` when another module defines executable work.
+- Assign every submission a stable idempotency key and an `ExecutionOrigin`.
+- Reuse an idempotency key only for the same specification and origin.
+- Consume typed execution events when coordinating dependent work.
 - An empty account workload type set means all current and future workload
   types. A non-empty set is an allowlist.
 - Use `PAGED` for row results, `REFERENCE` for externally materialized output,

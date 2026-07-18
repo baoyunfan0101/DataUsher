@@ -21,17 +21,20 @@ class ExecutionContractTest {
                 Map.of()
         );
         var request = new SubmitExecutionRequest(
-                new ExecutionQueueId("Default"),
-                new ExecutionAccountId("Spark-Prod"),
-                workload,
-                new ExecutionResultMode("materialized-reference"),
-                100,
+                new ExecutionSpecification(
+                        new ExecutionQueueId("Default"),
+                        new ExecutionAccountId("Spark-Prod"),
+                        workload,
+                        new ExecutionResultMode("materialized-reference"),
+                        100),
+                "report-2026-07-18",
+                ExecutionOrigin.direct("request-1"),
                 RequestContext.system("request-1", Instant.EPOCH)
         );
 
-        assertEquals("python.batch", request.workload().type().value());
-        assertEquals("materialized-reference", request.resultMode().value());
-        assertEquals("default", request.queueId().value());
+        assertEquals("python.batch", request.specification().workload().type().value());
+        assertEquals("materialized-reference", request.specification().resultMode().value());
+        assertEquals("default", request.specification().queueId().value());
     }
 
     @Test
