@@ -4,9 +4,11 @@ import com.datausher.development.api.CreateScriptRequest;
 import com.datausher.development.api.CreateScriptVersionRequest;
 import com.datausher.development.api.ScriptCommandService;
 import com.datausher.development.api.ScriptDefinition;
+import com.datausher.development.api.ScriptCreatedEvent;
 import com.datausher.development.api.ScriptId;
 import com.datausher.development.api.ScriptQueryService;
 import com.datausher.development.api.ScriptVersion;
+import com.datausher.development.api.ScriptVersionCreatedEvent;
 import com.datausher.governance.resource.api.RegisteredResource;
 import com.datausher.governance.resource.api.ResourceLifecycle;
 import com.datausher.governance.resource.api.ResourceQueryService;
@@ -16,6 +18,9 @@ import com.datausher.platform.audit.api.AuditTarget;
 import com.datausher.platform.audit.api.AuditedCommand;
 import com.datausher.platform.audit.api.AuditedCommandExecutor;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
 
 import java.time.Instant;
@@ -29,17 +34,23 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
     private final ResourceQueryService resources;
     private final Clock clock;
     private final AuditedCommandExecutor commandExecutor;
+    private final IdGenerator idGenerator;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultScriptService(
             ScriptStore store,
             ResourceQueryService resources,
             Clock clock,
-            AuditedCommandExecutor commandExecutor
+            AuditedCommandExecutor commandExecutor,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.resources = Objects.requireNonNull(resources, "resources must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.commandExecutor = Objects.requireNonNull(commandExecutor, "commandExecutor must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -50,7 +61,7 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
         ScriptDefinition script = new ScriptDefinition(
                 request.scriptId(), request.resourceRef(), request.displayName(), request.language(),
                 0, 1, now, now, request.requestContext().actor().actorId(), request.attributes());
-        return commandExecutor.execute(new AuditedCommand<>() {
+        ScriptDefinition created = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ScriptDefinition execute() {
                 store.createScript(script);
@@ -68,6 +79,9 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
                 store.deleteScript(result);
             }
         });
+        eventPublisher.publish(new ScriptCreatedEvent(
+                nextEventId(), now, request.requestContext(), created));
+        return created;
     }
 
     @Override
@@ -88,7 +102,7 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
                 current.scriptId(), current.resourceRef(), current.displayName(), current.language(),
                 versionNumber, current.revision() + 1, current.createdAt(), now,
                 current.createdBy(), current.attributes());
-        return commandExecutor.execute(new AuditedCommand<>() {
+        ScriptVersion created = commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ScriptVersion execute() {
                 store.createVersion(current, updated, version);
@@ -106,6 +120,9 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
                 store.deleteVersion(updated, current, result);
             }
         });
+        eventPublisher.publish(new ScriptVersionCreatedEvent(
+                nextEventId(), now, request.requestContext(), created));
+        return created;
     }
 
     @Override
@@ -149,5 +166,9 @@ public final class DefaultScriptService implements ScriptCommandService, ScriptQ
                 context, "development-lifecycle", action,
                 AuditTarget.global("script", script.scriptId().value()),
                 AuditOutcome.SUCCEEDED, details);
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(IdGenerationRequest.of("development", "domain-event"));
     }
 }

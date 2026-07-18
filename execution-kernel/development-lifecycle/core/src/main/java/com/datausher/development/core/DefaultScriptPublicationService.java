@@ -5,6 +5,7 @@ import com.datausher.development.api.ScriptPublication;
 import com.datausher.development.api.ScriptPublicationId;
 import com.datausher.development.api.ScriptPublicationService;
 import com.datausher.development.api.ScriptPublicationState;
+import com.datausher.development.api.ScriptPublicationStateChangedEvent;
 import com.datausher.development.api.ScriptQueryService;
 import com.datausher.development.api.ScriptVersion;
 import com.datausher.governance.approval.api.ApprovalCallbackHandler;
@@ -17,6 +18,8 @@ import com.datausher.governance.approval.api.ApprovalRequestStatus;
 import com.datausher.governance.approval.api.SubmitApprovalRequest;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
+import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.time.Clock;
 import com.datausher.workflow.api.CreateWorkflowVersionRequest;
 import com.datausher.workflow.api.WorkflowCommandService;
@@ -49,6 +52,7 @@ public final class DefaultScriptPublicationService
     private final ScriptPublicationStore store;
     private final IdGenerator idGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultScriptPublicationService(
             ScriptQueryService scripts,
@@ -57,7 +61,8 @@ public final class DefaultScriptPublicationService
             ApprovalCommandService approvals,
             ScriptPublicationStore store,
             IdGenerator idGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.scripts = Objects.requireNonNull(scripts, "scripts must not be null");
         this.workflowCommands = Objects.requireNonNull(
@@ -67,6 +72,7 @@ public final class DefaultScriptPublicationService
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -102,6 +108,7 @@ public final class DefaultScriptPublicationService
         if (!workflow.workflowId().equals(request.workflowId())) {
             throw new IllegalStateException("workflow identity changed during publication request");
         }
+        publishStateChange(Optional.empty(), publication, request.requestContext(), now);
         return submitApproval(publication.publicationId());
     }
 
@@ -125,7 +132,15 @@ public final class DefaultScriptPublicationService
                 new ApprovalCallbackRef(CALLBACK_TYPE, publication.publicationId().value(), Map.of()),
                 "script-publication:" + publication.publicationId().value(), attributes,
                 stored.requestContext()));
-        return store.attachApproval(publication, approval.requestId(), clock.now());
+        Instant updatedAt = clock.now();
+        ScriptPublicationTransitionResult transition = store.attachApproval(
+                publication, approval.requestId(), updatedAt);
+        if (transition.changed()) {
+            publishStateChange(
+                    Optional.of(publication.state()), transition.publication(),
+                    stored.requestContext(), updatedAt);
+        }
+        return transition.publication();
     }
 
     @Override
@@ -160,13 +175,13 @@ public final class DefaultScriptPublicationService
             throw new IllegalArgumentException("approval target does not match workflow");
         }
         if (invocation.approvalStatus() == ApprovalRequestStatus.REJECTED) {
-            store.complete(publication, ScriptPublicationState.REJECTED,
-                    Optional.empty(), Optional.empty(), clock.now());
+            complete(publication, ScriptPublicationState.REJECTED,
+                    Optional.empty(), Optional.empty(), invocation.requestContext());
             return;
         }
         if (invocation.approvalStatus() == ApprovalRequestStatus.CANCELLED) {
-            store.complete(publication, ScriptPublicationState.CANCELLED,
-                    Optional.empty(), Optional.empty(), clock.now());
+            complete(publication, ScriptPublicationState.CANCELLED,
+                    Optional.empty(), Optional.empty(), invocation.requestContext());
             return;
         }
         publishApproved(publication, workflow, invocation);
@@ -180,11 +195,11 @@ public final class DefaultScriptPublicationService
         Optional<WorkflowVersion> latest = workflows.findLatestVersion(publication.workflowId());
         if (latest.filter(version -> publicationMarker(version).equals(publication.publicationId().value()))
                 .isPresent()) {
-            completePublished(publication, latest.orElseThrow().version());
+            completePublished(publication, latest.orElseThrow().version(), invocation.requestContext());
             return;
         }
         if (workflow.latestVersion() != publication.baseWorkflowVersion()) {
-            completeConflict(publication, "workflow-version-changed");
+            completeConflict(publication, "workflow-version-changed", invocation.requestContext());
             return;
         }
         WorkflowVersion base = workflows.findVersion(
@@ -197,13 +212,13 @@ public final class DefaultScriptPublicationService
             WorkflowVersion published = workflowCommands.createVersion(new CreateWorkflowVersionRequest(
                     publication.workflowId(), workflow.revision(), specification,
                     invocation.requestContext()));
-            completePublished(publication, published.version());
+            completePublished(publication, published.version(), invocation.requestContext());
         } catch (IllegalStateException concurrentChange) {
             WorkflowVersion current = workflows.findLatestVersion(publication.workflowId()).orElseThrow();
             if (publicationMarker(current).equals(publication.publicationId().value())) {
-                completePublished(publication, current.version());
+                completePublished(publication, current.version(), invocation.requestContext());
             } else {
-                completeConflict(publication, "workflow-version-changed");
+                completeConflict(publication, "workflow-version-changed", invocation.requestContext());
             }
         }
     }
@@ -238,14 +253,40 @@ public final class DefaultScriptPublicationService
                 tasks, base.specification().dependencies(), base.specification().schedule(), attributes);
     }
 
-    private void completePublished(ScriptPublication publication, long workflowVersion) {
-        store.complete(publication, ScriptPublicationState.PUBLISHED,
-                Optional.of(workflowVersion), Optional.empty(), clock.now());
+    private void completePublished(
+            ScriptPublication publication,
+            long workflowVersion,
+            RequestContext requestContext
+    ) {
+        complete(publication, ScriptPublicationState.PUBLISHED,
+                Optional.of(workflowVersion), Optional.empty(), requestContext);
     }
 
-    private void completeConflict(ScriptPublication publication, String conflictCode) {
-        store.complete(publication, ScriptPublicationState.CONFLICTED,
-                Optional.empty(), Optional.of(conflictCode), clock.now());
+    private void completeConflict(
+            ScriptPublication publication,
+            String conflictCode,
+            RequestContext requestContext
+    ) {
+        complete(publication, ScriptPublicationState.CONFLICTED,
+                Optional.empty(), Optional.of(conflictCode), requestContext);
+    }
+
+    private ScriptPublication complete(
+            ScriptPublication publication,
+            ScriptPublicationState state,
+            Optional<Long> publishedWorkflowVersion,
+            Optional<String> conflictCode,
+            RequestContext requestContext
+    ) {
+        Instant updatedAt = clock.now();
+        ScriptPublicationTransitionResult transition = store.complete(
+                publication, state, publishedWorkflowVersion, conflictCode, updatedAt);
+        if (transition.changed()) {
+            publishStateChange(
+                    Optional.of(publication.state()), transition.publication(),
+                    requestContext, updatedAt);
+        }
+        return transition.publication();
     }
 
     private ScriptVersion requireScriptVersion(RequestScriptPublication request) {
@@ -296,5 +337,16 @@ public final class DefaultScriptPublicationService
 
     private static String publicationMarker(WorkflowVersion version) {
         return version.specification().attributes().getOrDefault(PUBLICATION_ATTRIBUTE, "");
+    }
+
+    private void publishStateChange(
+            Optional<ScriptPublicationState> previousState,
+            ScriptPublication publication,
+            RequestContext requestContext,
+            Instant occurredAt
+    ) {
+        eventPublisher.publish(new ScriptPublicationStateChangedEvent(
+                idGenerator.nextIdValue(IdGenerationRequest.of("development", "domain-event")),
+                occurredAt, requestContext, previousState, publication));
     }
 }

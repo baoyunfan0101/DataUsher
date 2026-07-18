@@ -10,7 +10,7 @@ import java.util.Optional;
 public interface DebugRunStore {
     DebugRunCreateResult createOrFind(DebugRun debugRun);
 
-    DebugRun markSubmitted(
+    DebugRunTransitionResult markSubmitted(
             DebugRun expectedDebugRun,
             ExecutionRequestId executionRequestId,
             Instant updatedAt

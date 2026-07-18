@@ -28,7 +28,7 @@ public final class InMemoryDebugRunStore implements DebugRunStore {
     }
 
     @Override
-    public synchronized DebugRun markSubmitted(
+    public synchronized DebugRunTransitionResult markSubmitted(
             DebugRun expectedDebugRun,
             ExecutionRequestId executionRequestId,
             Instant updatedAt
@@ -40,7 +40,7 @@ public final class InMemoryDebugRunStore implements DebugRunStore {
         if (!current.equals(expectedDebugRun)) {
             if (current.state() == DebugRunState.SUBMITTED
                     && current.executionRequestId().orElseThrow().equals(executionRequestId)) {
-                return current;
+                return new DebugRunTransitionResult(current, false);
             }
             throw new IllegalStateException("debug run changed concurrently: " + current.debugRunId());
         }
@@ -50,7 +50,7 @@ public final class InMemoryDebugRunStore implements DebugRunStore {
                 Optional.of(executionRequestId), current.createdAt(), updatedAt,
                 current.revision() + 1);
         runs.put(current.debugRunId(), submitted);
-        return submitted;
+        return new DebugRunTransitionResult(submitted, true);
     }
 
     @Override

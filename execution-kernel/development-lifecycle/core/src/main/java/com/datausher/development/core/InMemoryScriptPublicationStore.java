@@ -29,7 +29,7 @@ public final class InMemoryScriptPublicationStore implements ScriptPublicationSt
     }
 
     @Override
-    public synchronized ScriptPublication attachApproval(
+    public synchronized ScriptPublicationTransitionResult attachApproval(
             ScriptPublication expected,
             ApprovalRequestId approvalRequestId,
             Instant updatedAt
@@ -38,7 +38,7 @@ public final class InMemoryScriptPublicationStore implements ScriptPublicationSt
         ScriptPublication current = stored.publication();
         if (!current.equals(expected)) {
             if (current.approvalRequestId().filter(approvalRequestId::equals).isPresent()) {
-                return current;
+                return new ScriptPublicationTransitionResult(current, false);
             }
             throw new IllegalStateException("publication changed concurrently: " + current.publicationId());
         }
@@ -46,11 +46,11 @@ public final class InMemoryScriptPublicationStore implements ScriptPublicationSt
                 current, ScriptPublicationState.APPROVAL_PENDING,
                 Optional.of(approvalRequestId), Optional.empty(), Optional.empty(), updatedAt);
         publications.put(current.publicationId(), withPublication(stored, pending));
-        return pending;
+        return new ScriptPublicationTransitionResult(pending, true);
     }
 
     @Override
-    public synchronized ScriptPublication complete(
+    public synchronized ScriptPublicationTransitionResult complete(
             ScriptPublication expected,
             ScriptPublicationState state,
             Optional<Long> publishedWorkflowVersion,
@@ -66,7 +66,7 @@ public final class InMemoryScriptPublicationStore implements ScriptPublicationSt
             if (current.state() == state
                     && current.publishedWorkflowVersion().equals(publishedWorkflowVersion)
                     && current.conflictCode().equals(conflictCode)) {
-                return current;
+                return new ScriptPublicationTransitionResult(current, false);
             }
             throw new IllegalStateException("publication changed concurrently: " + current.publicationId());
         }
@@ -74,7 +74,7 @@ public final class InMemoryScriptPublicationStore implements ScriptPublicationSt
                 current, state, current.approvalRequestId(),
                 publishedWorkflowVersion, conflictCode, updatedAt);
         publications.put(current.publicationId(), withPublication(stored, completed));
-        return completed;
+        return new ScriptPublicationTransitionResult(completed, true);
     }
 
     @Override

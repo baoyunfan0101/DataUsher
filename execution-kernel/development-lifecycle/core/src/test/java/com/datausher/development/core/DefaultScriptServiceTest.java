@@ -39,9 +39,10 @@ class DefaultScriptServiceTest {
         var clock = new SystemClock();
         var ids = new UuidIdGenerator();
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var service = new DefaultScriptService(
                 new InMemoryScriptStore(), resources(resourceRef), clock,
-                new CompensatingAuditedCommandExecutor(audit));
+                new CompensatingAuditedCommandExecutor(audit), ids, events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         ScriptId scriptId = new ScriptId("daily-orders");
         var script = service.create(new CreateScriptRequest(
@@ -56,6 +57,9 @@ class DefaultScriptServiceTest {
         assertEquals(2, service.findScript(scriptId).orElseThrow().revision());
         assertThrows(IllegalStateException.class, () -> service.createVersion(
                 new CreateScriptVersionRequest(scriptId, 1, specification(), Map.of(), context)));
+        assertEquals(java.util.List.of(
+                        "development.script-created", "development.script-version-created"),
+                events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     private static ExecutionSpecification specification() {

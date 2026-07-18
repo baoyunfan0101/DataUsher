@@ -81,6 +81,12 @@ class DefaultScriptPublicationServiceTest {
         assertEquals("new-payload",
                 workflowVersion.specification().tasks().getFirst()
                         .executionSpecification().workload().payload());
+        assertEquals(List.of(
+                        "development.publication-state-changed",
+                        "development.publication-state-changed",
+                        "development.publication-state-changed"),
+                fixture.events.stream()
+                        .map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     @Test
@@ -121,10 +127,11 @@ class DefaultScriptPublicationServiceTest {
                 new ScriptId("script-1"), 1, specification("new-payload"),
                 Instant.EPOCH, "actor-1", Map.of());
         var approvals = new RecordingApprovals();
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var publications = new DefaultScriptPublicationService(
                 scripts(script), workflows, workflows, approvals,
-                new InMemoryScriptPublicationStore(), ids, clock);
-        return new Fixture(workflows, publications, approvals, workflowId, context);
+                new InMemoryScriptPublicationStore(), ids, clock, events::add);
+        return new Fixture(workflows, publications, approvals, workflowId, context, events);
     }
 
     private static ApprovalCallbackInvocation approved(
@@ -198,7 +205,8 @@ class DefaultScriptPublicationServiceTest {
             DefaultScriptPublicationService publications,
             RecordingApprovals approvals,
             WorkflowId workflowId,
-            RequestContext context
+            RequestContext context,
+            java.util.List<com.datausher.platform.shared.event.DomainEvent> events
     ) {
         RequestScriptPublication request(String idempotencyKey) {
             return new RequestScriptPublication(

@@ -4,6 +4,7 @@ import com.datausher.development.api.DebugRun;
 import com.datausher.development.api.DebugRunId;
 import com.datausher.development.api.DebugRunService;
 import com.datausher.development.api.DebugRunState;
+import com.datausher.development.api.DebugRunStateChangedEvent;
 import com.datausher.development.api.ScriptQueryService;
 import com.datausher.development.api.ScriptVersion;
 import com.datausher.development.api.StartDebugRunRequest;
@@ -15,6 +16,7 @@ import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
@@ -31,19 +33,22 @@ public final class DefaultDebugRunService implements DebugRunService, DebugWorke
     private final ExecutionCommandService executions;
     private final IdGenerator idGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultDebugRunService(
             ScriptQueryService scripts,
             DebugRunStore store,
             ExecutionCommandService executions,
             IdGenerator idGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.scripts = Objects.requireNonNull(scripts, "scripts must not be null");
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.executions = Objects.requireNonNull(executions, "executions must not be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -63,6 +68,10 @@ public final class DefaultDebugRunService implements DebugRunService, DebugWorke
                 || existing.scriptVersion() != request.scriptVersion()
                 || !existing.parameters().equals(request.parameters()))) {
             throw new IllegalStateException("debug idempotency key was used for a different request");
+        }
+        if (result.created()) {
+            eventPublisher.publish(new DebugRunStateChangedEvent(
+                    nextEventId(), now, request.requestContext(), Optional.empty(), existing));
         }
         return existing;
     }
@@ -87,7 +96,15 @@ public final class DefaultDebugRunService implements DebugRunService, DebugWorke
                         Map.of("scriptId", current.scriptId().value(),
                                 "scriptVersion", Long.toString(current.scriptVersion()))),
                 requestContext));
-        return store.markSubmitted(current, execution.requestId(), clock.now());
+        Instant updatedAt = clock.now();
+        DebugRunTransitionResult transition = store.markSubmitted(
+                current, execution.requestId(), updatedAt);
+        if (transition.changed()) {
+            eventPublisher.publish(new DebugRunStateChangedEvent(
+                    nextEventId(), updatedAt, requestContext,
+                    Optional.of(current.state()), transition.debugRun()));
+        }
+        return transition.debugRun();
     }
 
     @Override
@@ -114,5 +131,9 @@ public final class DefaultDebugRunService implements DebugRunService, DebugWorke
         return new ExecutionSpecification(
                 specification.queueId(), specification.accountId(), workload,
                 specification.resultMode(), specification.resultPageSize());
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(IdGenerationRequest.of("development", "domain-event"));
     }
 }

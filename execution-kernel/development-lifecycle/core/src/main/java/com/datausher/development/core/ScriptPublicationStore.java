@@ -11,13 +11,13 @@ import java.util.Optional;
 public interface ScriptPublicationStore {
     ScriptPublicationCreateResult createOrFind(StoredScriptPublication publication);
 
-    ScriptPublication attachApproval(
+    ScriptPublicationTransitionResult attachApproval(
             ScriptPublication expected,
             ApprovalRequestId approvalRequestId,
             Instant updatedAt
     );
 
-    ScriptPublication complete(
+    ScriptPublicationTransitionResult complete(
             ScriptPublication expected,
             ScriptPublicationState state,
             Optional<Long> publishedWorkflowVersion,

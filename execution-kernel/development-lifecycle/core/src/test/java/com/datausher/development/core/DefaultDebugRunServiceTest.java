@@ -40,9 +40,10 @@ class DefaultDebugRunServiceTest {
         ScriptVersion version = new ScriptVersion(
                 scriptId, 1, specification(), Instant.EPOCH, "actor-1", Map.of());
         RecordingExecutions executions = new RecordingExecutions();
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var service = new DefaultDebugRunService(
                 scripts(version), new InMemoryDebugRunStore(), executions,
-                new UuidIdGenerator(), new SystemClock());
+                new UuidIdGenerator(), new SystemClock(), events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         StartDebugRunRequest request = new StartDebugRunRequest(
                 scriptId, 1, "debug-key",
@@ -63,6 +64,10 @@ class DefaultDebugRunServiceTest {
         assertEquals(new ExecutionValue.DecimalValue(10),
                 executions.submissions.getFirst().specification().workload().parameters().get("limit"));
         assertEquals("debug-run", executions.submissions.getFirst().origin().type().value());
+        assertEquals(List.of(
+                        "development.debug-run-state-changed",
+                        "development.debug-run-state-changed"),
+                events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     @Test
@@ -72,7 +77,7 @@ class DefaultDebugRunServiceTest {
                 scriptId, 1, specification(), Instant.EPOCH, "actor-1", Map.of());
         var service = new DefaultDebugRunService(
                 scripts(version), new InMemoryDebugRunStore(), new RecordingExecutions(),
-                new UuidIdGenerator(), new SystemClock());
+                new UuidIdGenerator(), new SystemClock(), event -> { });
         RequestContext context = RequestContext.system("request-1", Instant.now());
         var original = service.start(new StartDebugRunRequest(
                 scriptId, 1, "debug-key", Map.of(), context));
