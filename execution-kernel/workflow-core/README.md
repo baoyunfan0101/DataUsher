@@ -16,3 +16,4 @@ provides default lifecycle services and replaceable stores.
 - Trigger workflows idempotently, then let `WorkflowWorker` dispatch ready tasks.
 - Use `ExecutionStateChangedEvent` to advance task dependencies and retries.
 - Query task logs and results through execution-core using the stored execution request reference.
+- Subscribe to typed workflow events for projections and integrations; use query services for current state.

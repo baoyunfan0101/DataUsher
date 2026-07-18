@@ -16,3 +16,4 @@ provides default lifecycle services and replaceable stores.
 - Query debug logs, state, and results through execution-core using the stored request reference.
 - Publish an immutable script version into an existing workflow task through approval.
 - Pin publication requests to a workflow version and resolve concurrent changes as conflicts.
+- Subscribe to typed development events for projections and integrations; use query services for current state.
