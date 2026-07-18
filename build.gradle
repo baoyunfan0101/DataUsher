@@ -130,6 +130,45 @@ project(":integration-kernel:adapter-contract-tests") {
     }
 }
 
+project(":data-kernel:datasource-connectivity-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":data-kernel:datasource-connectivity-core") {
+    dependencies {
+        api project(":data-kernel:datasource-connectivity-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        implementation project(":integration-kernel:datasource-adapters-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":integration-kernel:integration-runtime-core")
+    }
+}
+
+project(":data-kernel:metadata-catalog-api") {
+    dependencies {
+        api project(":data-kernel:datasource-connectivity-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":data-kernel:metadata-catalog-core") {
+    dependencies {
+        api project(":data-kernel:metadata-catalog-api")
+        implementation project(":data-kernel:datasource-connectivity-api")
+        implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":adapters:datasource-mysql") {
+    dependencies {
+        api project(":integration-kernel:datasource-adapters-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        testImplementation project(":integration-kernel:adapter-contract-tests")
+    }
+}
+
 configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
@@ -158,6 +197,8 @@ project(":datausher-app") {
         implementation project(":integration-kernel:compute-engine-adapters-api")
         implementation project(":integration-kernel:scheduler-adapters-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
+        implementation project(":data-kernel:datasource-connectivity-core")
+        implementation project(":data-kernel:metadata-catalog-core")
         testImplementation project(":integration-kernel:adapter-contract-tests")
     }
 
@@ -190,6 +231,11 @@ configure([
         project(":integration-kernel:scheduler-adapters-api"),
         project(":integration-kernel:llm-provider-adapters-api"),
         project(":integration-kernel:adapter-contract-tests"),
+        project(":data-kernel:datasource-connectivity-api"),
+        project(":data-kernel:datasource-connectivity-core"),
+        project(":data-kernel:metadata-catalog-api"),
+        project(":data-kernel:metadata-catalog-core"),
+        project(":adapters:datasource-mysql"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -280,6 +326,28 @@ def allowedProjectDependencies = [
                 ":integration-kernel:scheduler-adapters-api",
                 ":integration-kernel:llm-provider-adapters-api"
         ] as Set,
+        ":data-kernel:datasource-connectivity-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:datasource-connectivity-core": [
+                ":data-kernel:datasource-connectivity-api",
+                ":integration-kernel:integration-runtime-api",
+                ":integration-kernel:datasource-adapters-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:metadata-catalog-api": [
+                ":data-kernel:datasource-connectivity-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:metadata-catalog-core": [
+                ":data-kernel:metadata-catalog-api",
+                ":data-kernel:datasource-connectivity-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":adapters:datasource-mysql": [
+                ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
         ":datausher-app": [
                 ":platform-kernel:shared-types-core",
                 ":platform-kernel:module-contract-core",
@@ -293,7 +361,9 @@ def allowedProjectDependencies = [
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",
                 ":integration-kernel:scheduler-adapters-api",
-                ":integration-kernel:llm-provider-adapters-api"
+                ":integration-kernel:llm-provider-adapters-api",
+                ":data-kernel:datasource-connectivity-core",
+                ":data-kernel:metadata-catalog-core"
         ] as Set
 ]
 
