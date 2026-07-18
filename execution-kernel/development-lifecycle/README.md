@@ -1,8 +1,8 @@
 # development-lifecycle
 
-`development-lifecycle-api` defines versioned development assets and persistent debug
-run references. `development-lifecycle-core` provides default lifecycle services and
-replaceable stores.
+`development-lifecycle-api` defines versioned development assets, persistent debug run
+references, and approval-backed publication contracts. `development-lifecycle-core`
+provides default lifecycle services and replaceable stores.
 
 ## Usage Rules
 
@@ -14,3 +14,5 @@ replaceable stores.
 - Create immutable script versions and use script revisions for concurrent changes.
 - Start debug runs idempotently, then let the development worker submit them to execution-core.
 - Query debug logs, state, and results through execution-core using the stored request reference.
+- Publish an immutable script version into an existing workflow task through approval.
+- Pin publication requests to a workflow version and resolve concurrent changes as conflicts.

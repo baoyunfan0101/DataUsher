@@ -279,6 +279,9 @@ project(":execution-kernel:workflow-core-core") {
 project(":execution-kernel:development-lifecycle-api") {
     dependencies {
         api project(":execution-kernel:execution-core-api")
+        api project(":execution-kernel:workflow-core-api")
+        api project(":governance-kernel:approval-api")
+        api project(":governance-kernel:identity-access-api")
         api project(":governance-kernel:resource-registry-api")
         api project(":platform-kernel:shared-types-api")
     }
@@ -288,11 +291,15 @@ project(":execution-kernel:development-lifecycle-core") {
     dependencies {
         api project(":execution-kernel:development-lifecycle-api")
         implementation project(":execution-kernel:execution-core-api")
+        implementation project(":execution-kernel:workflow-core-api")
+        implementation project(":governance-kernel:approval-api")
+        implementation project(":governance-kernel:identity-access-api")
         implementation project(":governance-kernel:resource-registry-api")
         implementation project(":platform-kernel:audit-api")
         implementation project(":platform-kernel:shared-types-api")
         testImplementation project(":platform-kernel:audit-core")
         testImplementation project(":platform-kernel:shared-types-core")
+        testImplementation project(":execution-kernel:workflow-core-core")
     }
 }
 
@@ -581,12 +588,18 @@ def allowedProjectDependencies = [
         ] as Set,
         ":execution-kernel:development-lifecycle-api": [
                 ":execution-kernel:execution-core-api",
+                ":execution-kernel:workflow-core-api",
+                ":governance-kernel:approval-api",
+                ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":execution-kernel:development-lifecycle-core": [
                 ":execution-kernel:development-lifecycle-api",
                 ":execution-kernel:execution-core-api",
+                ":execution-kernel:workflow-core-api",
+                ":governance-kernel:approval-api",
+                ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:audit-api",
                 ":platform-kernel:shared-types-api"
