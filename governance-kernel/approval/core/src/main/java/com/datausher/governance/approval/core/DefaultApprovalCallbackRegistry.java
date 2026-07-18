@@ -30,6 +30,7 @@ public final class DefaultApprovalCallbackRegistry
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final ConcurrentMap<ApprovalCallbackType, ApprovalCallbackHandler> handlers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Object> deliveryLocks = new ConcurrentHashMap<>();
     private final ApprovalCallbackStore store;
     private final Clock clock;
     private final AuditCommandService audit;
@@ -90,7 +91,19 @@ public final class DefaultApprovalCallbackRegistry
                 previous.callbackType(), previous.correlationKey(), previous.parameters(), request.requestContext()));
     }
 
-    private synchronized ApprovalCallbackDelivery deliver(ApprovalCallbackInvocation invocation) {
+    private ApprovalCallbackDelivery deliver(ApprovalCallbackInvocation invocation) {
+        String requestId = invocation.approvalRequestId().value();
+        Object lock = deliveryLocks.computeIfAbsent(requestId, ignored -> new Object());
+        try {
+            synchronized (lock) {
+                return deliverLocked(invocation);
+            }
+        } finally {
+            deliveryLocks.remove(requestId, lock);
+        }
+    }
+
+    private ApprovalCallbackDelivery deliverLocked(ApprovalCallbackInvocation invocation) {
         Optional<StoredApprovalCallback> previous = store.find(invocation.approvalRequestId());
         if (previous.map(StoredApprovalCallback::delivery)
                 .map(ApprovalCallbackDelivery::status)
