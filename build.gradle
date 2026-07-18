@@ -146,6 +146,21 @@ project(":data-kernel:datasource-connectivity-core") {
     }
 }
 
+project(":data-kernel:metadata-catalog-api") {
+    dependencies {
+        api project(":data-kernel:datasource-connectivity-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":data-kernel:metadata-catalog-core") {
+    dependencies {
+        api project(":data-kernel:metadata-catalog-api")
+        implementation project(":data-kernel:datasource-connectivity-api")
+        implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
 configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
@@ -208,6 +223,8 @@ configure([
         project(":integration-kernel:adapter-contract-tests"),
         project(":data-kernel:datasource-connectivity-api"),
         project(":data-kernel:datasource-connectivity-core"),
+        project(":data-kernel:metadata-catalog-api"),
+        project(":data-kernel:metadata-catalog-core"),
         project(":datausher-app")
 ]) {
     dependencies {
@@ -305,6 +322,15 @@ def allowedProjectDependencies = [
                 ":data-kernel:datasource-connectivity-api",
                 ":integration-kernel:integration-runtime-api",
                 ":integration-kernel:datasource-adapters-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:metadata-catalog-api": [
+                ":data-kernel:datasource-connectivity-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:metadata-catalog-core": [
+                ":data-kernel:metadata-catalog-api",
+                ":data-kernel:datasource-connectivity-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":datausher-app": [

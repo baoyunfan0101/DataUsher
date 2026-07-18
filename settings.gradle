@@ -40,6 +40,8 @@ include(
     "integration-kernel:adapter-contract-tests",
     "data-kernel:datasource-connectivity-api",
     "data-kernel:datasource-connectivity-core",
+    "data-kernel:metadata-catalog-api",
+    "data-kernel:metadata-catalog-core",
     "datausher-app"
 )
 
@@ -93,3 +95,7 @@ project(":data-kernel:datasource-connectivity-api").projectDir =
         file("data-kernel/datasource-connectivity/api")
 project(":data-kernel:datasource-connectivity-core").projectDir =
         file("data-kernel/datasource-connectivity/core")
+project(":data-kernel:metadata-catalog-api").projectDir =
+        file("data-kernel/metadata-catalog/api")
+project(":data-kernel:metadata-catalog-core").projectDir =
+        file("data-kernel/metadata-catalog/core")
