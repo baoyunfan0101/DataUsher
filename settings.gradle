@@ -54,6 +54,8 @@ include(
     "execution-kernel:execution-sql-core",
     "execution-kernel:workflow-core-api",
     "execution-kernel:workflow-core-core",
+    "execution-kernel:development-lifecycle-api",
+    "execution-kernel:development-lifecycle-core",
     "adapters:datasource-mysql",
     "adapters:compute-local-sql",
     "datausher-app"
@@ -137,6 +139,10 @@ project(":execution-kernel:workflow-core-api").projectDir =
         file("execution-kernel/workflow-core/api")
 project(":execution-kernel:workflow-core-core").projectDir =
         file("execution-kernel/workflow-core/core")
+project(":execution-kernel:development-lifecycle-api").projectDir =
+        file("execution-kernel/development-lifecycle/api")
+project(":execution-kernel:development-lifecycle-core").projectDir =
+        file("execution-kernel/development-lifecycle/core")
 project(":adapters:datasource-mysql").projectDir =
         file("adapters/datasource-mysql")
 project(":adapters:compute-local-sql").projectDir =
