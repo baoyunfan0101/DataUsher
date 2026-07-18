@@ -34,6 +34,7 @@ include(
     "governance-kernel:resource-ownership-api",
     "governance-kernel:resource-ownership-core",
     "governance-kernel:approval-api",
+    "governance-kernel:approval-core",
     "integration-kernel:integration-runtime-api",
     "integration-kernel:integration-runtime-core",
     "integration-kernel:datasource-adapters-api",
@@ -92,6 +93,8 @@ project(":governance-kernel:resource-ownership-core").projectDir =
         file("governance-kernel/resource-ownership/core")
 project(":governance-kernel:approval-api").projectDir =
         file("governance-kernel/approval/api")
+project(":governance-kernel:approval-core").projectDir =
+        file("governance-kernel/approval/core")
 project(":integration-kernel:integration-runtime-api").projectDir =
         file("integration-kernel/integration-runtime/api")
 project(":integration-kernel:integration-runtime-core").projectDir =
