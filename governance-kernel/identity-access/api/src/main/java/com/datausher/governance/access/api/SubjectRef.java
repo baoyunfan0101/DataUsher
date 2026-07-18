@@ -12,6 +12,6 @@ public record SubjectRef(SubjectType type, String subjectId) {
     }
 
     public String canonicalValue() {
-        return type.name().toLowerCase() + ":" + subjectId;
+        return type.value() + ":" + subjectId;
     }
 }
