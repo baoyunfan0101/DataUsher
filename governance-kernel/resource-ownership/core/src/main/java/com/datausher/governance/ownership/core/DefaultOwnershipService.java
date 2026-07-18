@@ -118,14 +118,22 @@ public final class DefaultOwnershipService implements OwnershipCommandService, O
     @Override
     public List<ResourceOwner> listOwners(ResourceRef resourceRef) {
         Objects.requireNonNull(resourceRef, "resourceRef must not be null");
-        PageResult<ResourceOwner> first = store.search(
-                OwnershipQuery.forResource(resourceRef),
-                new PageRequest(1, 1000, List.of())
-        );
-        if (first.total() > first.size()) {
-            throw new IllegalStateException("resource has more than 1000 owner assignments; use search");
+        List<ResourceOwner> owners = new java.util.ArrayList<>();
+        int page = 1;
+        long total;
+        do {
+            PageResult<ResourceOwner> result = store.search(
+                    OwnershipQuery.forResource(resourceRef),
+                    new PageRequest(page, 1000, List.of())
+            );
+            owners.addAll(result.items());
+            total = result.total();
+            page++;
+        } while (owners.size() < total);
+        if (owners.size() != total) {
+            throw new IllegalStateException("ownership changed while all owners were being listed");
         }
-        return first.items();
+        return List.copyOf(owners);
     }
 
     @Override

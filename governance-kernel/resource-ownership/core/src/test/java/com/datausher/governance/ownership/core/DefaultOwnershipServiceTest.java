@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,6 +58,35 @@ class DefaultOwnershipServiceTest {
                 resourceRef, subjectRef, new OwnershipRole("data-steward"), context));
 
         assertTrue(service.listOwners(resourceRef).isEmpty());
+    }
+
+    @Test
+    void listsEveryOwnerAcrossStorePages() {
+        ResourceRef resourceRef = ResourceRef.global("table", "orders");
+        InMemoryOwnershipStore store = new InMemoryOwnershipStore();
+        Instant assignedAt = Instant.parse("2026-07-18T00:00:00Z");
+        IntStream.range(0, 1001).forEach(index -> {
+            var owner = new com.datausher.governance.ownership.api.ResourceOwner(
+                    resourceRef,
+                    new SubjectRef(SubjectType.USER, "owner-" + index),
+                    OwnershipRole.TECHNICAL,
+                    assignedAt,
+                    "system",
+                    Map.of()
+            );
+            store.replace(Optional.empty(), Optional.of(owner));
+        });
+        var clock = new SystemClock();
+        var audit = new DefaultAuditService(new InMemoryAuditEventStore(), new UuidIdGenerator(), clock);
+        var service = new DefaultOwnershipService(
+                store,
+                resources(resourceRef),
+                identities(new SubjectRef(SubjectType.USER, "unused")),
+                clock,
+                new CompensatingAuditedCommandExecutor(audit)
+        );
+
+        assertEquals(1001, service.listOwners(resourceRef).size());
     }
 
     private static ResourceQueryService resources(ResourceRef ref) {
