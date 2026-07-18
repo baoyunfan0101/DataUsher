@@ -1,18 +1,14 @@
 package com.datausher.workflow.core;
 
-import com.datausher.execution.api.ExecutionValue;
 import com.datausher.integration.runtime.api.AdapterInvocationExecutor;
 import com.datausher.integration.runtime.api.AdapterRegistry;
 import com.datausher.integration.runtime.api.AdapterRequestContext;
-import com.datausher.integration.runtime.api.IntegrationValue;
 import com.datausher.integration.scheduler.api.PublishedWorkflow;
 import com.datausher.integration.scheduler.api.SchedulerDependencyCondition;
 import com.datausher.integration.scheduler.api.SchedulerSchedule;
 import com.datausher.integration.scheduler.api.SchedulerScheduleType;
 import com.datausher.integration.scheduler.api.SchedulerScheduleStatus;
-import com.datausher.integration.scheduler.api.SchedulerTaskDefinition;
 import com.datausher.integration.scheduler.api.SchedulerTaskDependency;
-import com.datausher.integration.scheduler.api.SchedulerTaskType;
 import com.datausher.integration.scheduler.api.WorkflowSchedulerAdapter;
 import com.datausher.platform.shared.time.Clock;
 import com.datausher.platform.shared.event.DomainEventPublisher;
@@ -30,20 +26,47 @@ import com.datausher.workflow.api.WorkflowRuntimeType;
 import com.datausher.workflow.api.WorkflowVersion;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public final class DefaultWorkflowPublicationService implements WorkflowPublicationService {
     private final WorkflowQueryService workflows;
     private final WorkflowPublicationStore store;
     private final AdapterRegistry adapters;
     private final AdapterInvocationExecutor invocationExecutor;
+    private final SchedulerTaskDefinitionMapperRegistry taskMappers;
     private final Clock clock;
     private final Duration adapterTimeout;
     private final IdGenerator idGenerator;
     private final DomainEventPublisher eventPublisher;
+
+    public DefaultWorkflowPublicationService(
+            WorkflowQueryService workflows,
+            WorkflowPublicationStore store,
+            AdapterRegistry adapters,
+            AdapterInvocationExecutor invocationExecutor,
+            SchedulerTaskDefinitionMapperRegistry taskMappers,
+            Clock clock,
+            Duration adapterTimeout,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
+    ) {
+        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
+        this.store = Objects.requireNonNull(store, "store must not be null");
+        this.adapters = Objects.requireNonNull(adapters, "adapters must not be null");
+        this.invocationExecutor = Objects.requireNonNull(
+                invocationExecutor, "invocationExecutor must not be null");
+        this.taskMappers = Objects.requireNonNull(taskMappers, "taskMappers must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.adapterTimeout = Objects.requireNonNull(adapterTimeout, "adapterTimeout must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
+        if (adapterTimeout.isZero() || adapterTimeout.isNegative()) {
+            throw new IllegalArgumentException("adapterTimeout must be positive");
+        }
+    }
 
     public DefaultWorkflowPublicationService(
             WorkflowQueryService workflows,
@@ -55,18 +78,10 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
             IdGenerator idGenerator,
             DomainEventPublisher eventPublisher
     ) {
-        this.workflows = Objects.requireNonNull(workflows, "workflows must not be null");
-        this.store = Objects.requireNonNull(store, "store must not be null");
-        this.adapters = Objects.requireNonNull(adapters, "adapters must not be null");
-        this.invocationExecutor = Objects.requireNonNull(
-                invocationExecutor, "invocationExecutor must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.adapterTimeout = Objects.requireNonNull(adapterTimeout, "adapterTimeout must not be null");
-        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
-        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
-        if (adapterTimeout.isZero() || adapterTimeout.isNegative()) {
-            throw new IllegalArgumentException("adapterTimeout must be positive");
-        }
+        this(workflows, store, adapters, invocationExecutor,
+                new SchedulerTaskDefinitionMapperRegistry(List.of(
+                        new ExecutionSchedulerTaskDefinitionMapper())),
+                clock, adapterTimeout, idGenerator, eventPublisher);
     }
 
     @Override
@@ -120,15 +135,10 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
             WorkflowVersion version,
             PublishWorkflowRequest request
     ) {
-        var tasks = version.specification().tasks().stream().map(task -> {
-            var workload = task.executionSpecification().workload();
-            return new SchedulerTaskDefinition(
-                    task.taskKey(), SchedulerTaskType.PLATFORM_EXECUTION,
-                    version.workflowId().value() + "@" + version.version() + ":" + task.taskKey(),
-                    workload.parameters().entrySet().stream().collect(Collectors.toUnmodifiableMap(
-                            Map.Entry::getKey, entry -> toIntegrationValue(entry.getValue()))),
-                    Map.of("workloadType", workload.type().value()));
-        }).toList();
+        var tasks = version.specification().tasks().stream()
+                .map(task -> taskMappers.require(task.action().taskType())
+                        .map(new SchedulerTaskMappingRequest(version, task)))
+                .toList();
         var dependencies = version.specification().dependencies().stream()
                 .map(dependency -> new SchedulerTaskDependency(
                         dependency.upstreamTaskKey(), dependency.downstreamTaskKey(),
@@ -180,24 +190,5 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
                 || published.revision() != definition.revision()) {
             throw new IllegalStateException("scheduler adapter returned mismatched publication identity");
         }
-    }
-
-    private static IntegrationValue toIntegrationValue(ExecutionValue value) {
-        return switch (value) {
-            case ExecutionValue.NullValue ignored -> new IntegrationValue.NullValue();
-            case ExecutionValue.TextValue text -> new IntegrationValue.TextValue(text.value());
-            case ExecutionValue.BooleanValue bool -> new IntegrationValue.BooleanValue(bool.value());
-            case ExecutionValue.DecimalValue decimal -> new IntegrationValue.DecimalValue(decimal.value());
-            case ExecutionValue.InstantValue instant -> new IntegrationValue.InstantValue(instant.value());
-            case ExecutionValue.DateValue date -> new IntegrationValue.DateValue(date.value());
-            case ExecutionValue.DateTimeValue dateTime -> new IntegrationValue.DateTimeValue(dateTime.value());
-            case ExecutionValue.BinaryValue binary -> new IntegrationValue.BinaryValue(binary.base64());
-            case ExecutionValue.ArrayValue array -> new IntegrationValue.ArrayValue(
-                    array.values().stream().map(DefaultWorkflowPublicationService::toIntegrationValue).toList());
-            case ExecutionValue.ObjectValue object -> new IntegrationValue.ObjectValue(
-                    object.values().entrySet().stream().collect(Collectors.toUnmodifiableMap(
-                            Map.Entry::getKey,
-                            entry -> toIntegrationValue(entry.getValue()))));
-        };
     }
 }

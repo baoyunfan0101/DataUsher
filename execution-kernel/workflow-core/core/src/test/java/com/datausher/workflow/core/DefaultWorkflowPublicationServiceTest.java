@@ -17,6 +17,8 @@ import com.datausher.integration.runtime.api.IntegrationAdapter;
 import com.datausher.integration.runtime.core.InMemoryAdapterRegistry;
 import com.datausher.integration.scheduler.api.PublishedWorkflow;
 import com.datausher.integration.scheduler.api.SchedulerCapabilities;
+import com.datausher.integration.scheduler.api.SchedulerTaskDefinition;
+import com.datausher.integration.scheduler.api.SchedulerTaskType;
 import com.datausher.integration.scheduler.api.WorkflowDefinition;
 import com.datausher.integration.scheduler.api.WorkflowRunHandle;
 import com.datausher.integration.scheduler.api.WorkflowRunState;
@@ -32,6 +34,8 @@ import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
 import com.datausher.workflow.api.WorkflowTaskDefinition;
+import com.datausher.workflow.api.WorkflowTaskAction;
+import com.datausher.workflow.api.WorkflowTaskType;
 import com.datausher.workflow.api.WorkflowRuntimeBinding;
 import com.datausher.workflow.api.WorkflowVersion;
 import com.datausher.workflow.api.WorkflowVersionSpec;
@@ -78,6 +82,48 @@ class DefaultWorkflowPublicationServiceTest {
                 events.stream().map(com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
+    @Test
+    void publishesRegisteredCustomTaskActions() {
+        WorkflowId workflowId = new WorkflowId("custom-workflow");
+        WorkflowTaskType customType = new WorkflowTaskType("custom");
+        WorkflowTaskDefinition customTask = new WorkflowTaskDefinition(
+                "custom", "Custom", new FixtureAction(customType), TaskRetryPolicy.NONE,
+                Duration.ofMinutes(10), Map.of());
+        WorkflowVersion version = new WorkflowVersion(
+                workflowId, 1, new WorkflowVersionSpec(
+                        List.of(customTask), List.of(), List.of(),
+                        WorkflowRuntimeBinding.schedulerManaged(
+                                "scheduler", "binding", Map.of()), Map.of()),
+                Instant.EPOCH, "system");
+        var registry = new InMemoryAdapterRegistry();
+        var scheduler = new RecordingScheduler();
+        registry.register(scheduler);
+        SchedulerTaskDefinitionMapper customMapper = new SchedulerTaskDefinitionMapper() {
+            @Override
+            public WorkflowTaskType taskType() {
+                return customType;
+            }
+
+            @Override
+            public SchedulerTaskDefinition map(SchedulerTaskMappingRequest request) {
+                return new SchedulerTaskDefinition(
+                        request.taskDefinition().taskKey(), new SchedulerTaskType("custom"),
+                        "custom-payload", Map.of(), Map.of());
+            }
+        };
+        var service = new DefaultWorkflowPublicationService(
+                versions(version), new InMemoryWorkflowPublicationStore(), registry,
+                new DirectInvocationExecutor(), new SchedulerTaskDefinitionMapperRegistry(
+                List.of(new ExecutionSchedulerTaskDefinitionMapper(), customMapper)),
+                new SystemClock(), Duration.ofSeconds(30), new UuidIdGenerator(), event -> { });
+
+        service.publish(new PublishWorkflowRequest(
+                workflowId, 1, "scheduler", "binding", "publish-custom",
+                RequestContext.system("request-custom", Instant.now())));
+
+        assertEquals("custom", scheduler.lastDefinition.tasks().getFirst().taskType().value());
+    }
+
     private static WorkflowTaskDefinition task(String key) {
         return new WorkflowTaskDefinition(
                 key, "Extract",
@@ -113,6 +159,9 @@ class DefaultWorkflowPublicationServiceTest {
         };
     }
 
+    private record FixtureAction(WorkflowTaskType taskType) implements WorkflowTaskAction {
+    }
+
     private static final class DirectInvocationExecutor implements AdapterInvocationExecutor {
         @Override
         public <T> T execute(
@@ -132,9 +181,11 @@ class DefaultWorkflowPublicationServiceTest {
                         AdapterCapability.of(SchedulerCapabilities.WORKFLOW_PUBLICATION),
                         AdapterCapability.of(SchedulerCapabilities.WORKFLOW_EXECUTION),
                         AdapterCapability.of(SchedulerCapabilities.TASK_OBSERVATION)), Map.of());
+        private WorkflowDefinition lastDefinition;
 
         @Override
         public PublishedWorkflow publish(AdapterRequestContext context, WorkflowDefinition definition) {
+            lastDefinition = definition;
             return new PublishedWorkflow(
                     DESCRIPTOR.adapterId(), definition.bindingId(), definition.workflowId(),
                     definition.idempotencyKey(), "external-" + definition.workflowId(), definition.revision());
