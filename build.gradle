@@ -253,6 +253,29 @@ project(":execution-kernel:execution-sql-core") {
     }
 }
 
+project(":execution-kernel:workflow-core-api") {
+    dependencies {
+        api project(":execution-kernel:execution-core-api")
+        api project(":governance-kernel:resource-registry-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":execution-kernel:workflow-core-core") {
+    dependencies {
+        api project(":execution-kernel:workflow-core-api")
+        implementation project(":execution-kernel:execution-core-api")
+        implementation project(":governance-kernel:resource-registry-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        implementation project(":integration-kernel:scheduler-adapters-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:audit-core")
+        testImplementation project(":platform-kernel:shared-types-core")
+        testImplementation project(":integration-kernel:integration-runtime-core")
+    }
+}
+
 project(":adapters:datasource-mysql") {
     dependencies {
         api project(":integration-kernel:datasource-adapters-api")
@@ -305,6 +328,7 @@ project(":datausher-app") {
         implementation project(":data-kernel:metadata-catalog-core")
         implementation project(":execution-kernel:execution-core-core")
         implementation project(":execution-kernel:execution-sql-core")
+        implementation project(":execution-kernel:workflow-core-core")
         implementation project(":adapters:compute-local-sql")
         testImplementation project(":integration-kernel:adapter-contract-tests")
     }
@@ -352,6 +376,8 @@ configure([
         project(":execution-kernel:execution-core-core"),
         project(":execution-kernel:execution-sql-api"),
         project(":execution-kernel:execution-sql-core"),
+        project(":execution-kernel:workflow-core-api"),
+        project(":execution-kernel:workflow-core-core"),
         project(":adapters:datasource-mysql"),
         project(":adapters:compute-local-sql"),
         project(":datausher-app")
@@ -516,6 +542,20 @@ def allowedProjectDependencies = [
                 ":integration-kernel:compute-engine-adapters-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
+        ":execution-kernel:workflow-core-api": [
+                ":execution-kernel:execution-core-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":execution-kernel:workflow-core-core": [
+                ":execution-kernel:workflow-core-api",
+                ":execution-kernel:execution-core-api",
+                ":governance-kernel:resource-registry-api",
+                ":integration-kernel:integration-runtime-api",
+                ":integration-kernel:scheduler-adapters-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
         ":adapters:datasource-mysql": [
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:integration-runtime-api"
@@ -545,6 +585,7 @@ def allowedProjectDependencies = [
                 ":data-kernel:metadata-catalog-core",
                 ":execution-kernel:execution-core-core",
                 ":execution-kernel:execution-sql-core",
+                ":execution-kernel:workflow-core-core",
                 ":adapters:compute-local-sql"
         ] as Set
 ]
