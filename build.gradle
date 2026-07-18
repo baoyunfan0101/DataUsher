@@ -173,6 +173,8 @@ project(":execution-kernel:execution-core-core") {
         implementation project(":integration-kernel:integration-runtime-api")
         implementation project(":integration-kernel:compute-engine-adapters-api")
         implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":integration-kernel:integration-runtime-core")
+        testImplementation project(":platform-kernel:shared-types-core")
     }
 }
 
