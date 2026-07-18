@@ -35,7 +35,7 @@ public final class InMemorySubjectStore implements SubjectStore {
         for (Subject subject : subjects.values()) {
             String searchText = subject.ref().subjectId().toLowerCase() + " "
                     + subject.displayName().toLowerCase();
-            if ((query.type() == null || query.type() == subject.ref().type())
+            if ((query.type() == null || query.type().equals(subject.ref().type()))
                     && (query.status() == null || query.status() == subject.status())
                     && (query.text() == null || searchText.contains(query.text()))) {
                 matches.add(subject);

@@ -29,9 +29,26 @@ class InMemorySubjectStoreTest {
         assertEquals("user-2", result.items().get(0).ref().subjectId());
     }
 
+    @Test
+    void matchesExtensibleSubjectTypesByValue() {
+        InMemorySubjectStore store = new InMemorySubjectStore();
+        store.save(subject("subject-1", "Workload", new SubjectType("workload-identity")));
+
+        var result = store.search(
+                new SubjectQuery(new SubjectType("workload-identity"), null, null),
+                PageRequest.firstPage()
+        );
+
+        assertEquals(1, result.total());
+    }
+
     private static Subject subject(String subjectId, String displayName) {
+        return subject(subjectId, displayName, SubjectType.USER);
+    }
+
+    private static Subject subject(String subjectId, String displayName, SubjectType type) {
         return new Subject(
-                new SubjectRef(SubjectType.USER, subjectId),
+                new SubjectRef(type, subjectId),
                 displayName,
                 SubjectStatus.ACTIVE,
                 Map.of()
