@@ -1,29 +1,19 @@
 # metadata-catalog
 
-## Owns
+`metadata-catalog-api` contains synchronization, metadata query, search, schema,
+and immutable value contracts. `metadata-catalog-core` contains the default
+catalog services and storage ports.
 
-```text
-Catalog, database, table, and column models
-Stable metadata asset identifiers
-Discovery synchronization
-Metadata search
-Current table schemas and immutable schema history
-Metadata synchronization events
-```
+## Usage Rules
 
-## Does not own
-
-```text
-External system discovery
-JDBC or vendor SDK calls
-Datasource credentials and connection testing
-Query execution
-Lineage, profiling, and data quality
-```
-
-The catalog consumes `DatasourceDiscoverySnapshot` values only. External object
-identifiers remain adapter-defined, while internal IDs are stable SHA-256 keys
-scoped by asset type and datasource. A full snapshot may use `REPLACE`; partial
-snapshots must use `UPSERT` so unrelated metadata is never deleted.
-
-Schema versions are appended only when the ordered column fingerprint changes.
+- Business modules depend on `metadata-catalog-api` only.
+- The application composition root selects `metadata-catalog-core` implementations.
+- Synchronize only normalized `DatasourceDiscoverySnapshot` values; never call vendor APIs from the catalog.
+- Use `REPLACE` only with a full datasource snapshot and `UPSERT` with a partial snapshot.
+- Treat `MetadataId` and schema fingerprints as opaque stable values.
+- An empty search type set means all current and future asset types.
+- Preserve custom `MetadataAssetType`, `TableKind`, and unknown attributes for forward compatibility.
+- Use the ordered column list as the schema contract; schema history is append-only.
+- Storage implementations must apply each synchronization atomically and preserve prior state on failure.
+- Storage implementations own filtering, relevance ordering, and paging while honoring the public search query.
+- Keep query execution, lineage, profiling, quality results, and vendor types outside this module.

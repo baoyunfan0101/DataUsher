@@ -1,26 +1,21 @@
 # data-kernel
 
-## Responsibility
+Stable datasource and metadata boundaries.
 
-`data-kernel` owns the platform representation of data sources and data assets.
-It converts external discovery results into stable, reusable platform metadata.
+| Project | Use for | Depends on |
+| --- | --- | --- |
+| `datasource-connectivity-api` | Datasource lifecycle, queries, connection tests, and discovery snapshots | `shared-types-api` |
+| `datasource-connectivity-core` | Default datasource orchestration and storage ports | `datasource-connectivity-api`, integration APIs, `shared-types-api` |
+| `metadata-catalog-api` | Metadata synchronization, queries, search, and schema contracts | `datasource-connectivity-api`, `shared-types-api` |
+| `metadata-catalog-core` | Default catalog services and storage ports | data-kernel APIs, `shared-types-api` |
 
-## Module boundaries
+## Usage Rules
 
-```text
-datasource-connectivity
-    Owns datasource definitions and lifecycle.
-    Orchestrates connector calls through integration-kernel ports.
-    Publishes normalized discovery snapshots.
-    Never stores credentials or implements vendor protocols.
-
-metadata-catalog
-    Owns catalogs, databases, tables, columns, search documents, and schemas.
-    Consumes normalized discovery snapshots from datasource-connectivity.
-    Never calls JDBC, vendor SDKs, or credential services.
-```
-
-The kernel does not own SQL execution, workflow scheduling, connector drivers,
-credential values, access control, lineage, profiling, or quality execution.
-
-No data-kernel API exposes JDBC or MySQL types.
+- Business and library modules depend on `*-api` projects only.
+- Only an application composition root may depend on `*-core` projects.
+- A core project may depend on another module's API, never on another core.
+- Keep credential values, vendor types, query execution, lineage, profiling, and quality execution outside data-kernel APIs.
+- Treat identifiers, classification values, attributes, and fingerprints as opaque contract values.
+- Preserve unknown classification values and attributes when relaying data between modules.
+- Add new capabilities through new focused service interfaces instead of widening existing interfaces.
+- Run `./gradlew verifyModuleBoundaries` after changing project dependencies.
