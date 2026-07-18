@@ -31,6 +31,13 @@ include(
     "governance-kernel:resource-registry-core",
     "governance-kernel:identity-access-api",
     "governance-kernel:identity-access-core",
+    "integration-kernel:integration-runtime-api",
+    "integration-kernel:integration-runtime-core",
+    "integration-kernel:datasource-adapters-api",
+    "integration-kernel:compute-engine-adapters-api",
+    "integration-kernel:scheduler-adapters-api",
+    "integration-kernel:llm-provider-adapters-api",
+    "integration-kernel:adapter-contract-tests",
     "datausher-app"
 )
 
@@ -66,3 +73,17 @@ project(":governance-kernel:identity-access-api").projectDir =
         file("governance-kernel/identity-access/api")
 project(":governance-kernel:identity-access-core").projectDir =
         file("governance-kernel/identity-access/core")
+project(":integration-kernel:integration-runtime-api").projectDir =
+        file("integration-kernel/integration-runtime/api")
+project(":integration-kernel:integration-runtime-core").projectDir =
+        file("integration-kernel/integration-runtime/core")
+project(":integration-kernel:datasource-adapters-api").projectDir =
+        file("integration-kernel/datasource-adapters/api")
+project(":integration-kernel:compute-engine-adapters-api").projectDir =
+        file("integration-kernel/compute-engine-adapters/api")
+project(":integration-kernel:scheduler-adapters-api").projectDir =
+        file("integration-kernel/scheduler-adapters/api")
+project(":integration-kernel:llm-provider-adapters-api").projectDir =
+        file("integration-kernel/llm-provider-adapters/api")
+project(":integration-kernel:adapter-contract-tests").projectDir =
+        file("integration-kernel/adapter-contract-tests")
