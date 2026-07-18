@@ -8,10 +8,12 @@ public enum TaskInstanceState {
     RUNNING,
     SUCCEEDED,
     FAILED,
+    TIMED_OUT,
     CANCELLED,
     SKIPPED;
 
     public boolean terminal() {
-        return this == SUCCEEDED || this == FAILED || this == CANCELLED || this == SKIPPED;
+        return this == SUCCEEDED || this == FAILED || this == TIMED_OUT
+                || this == CANCELLED || this == SKIPPED;
     }
 }

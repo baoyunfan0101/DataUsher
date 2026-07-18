@@ -9,6 +9,8 @@ public interface WorkflowRuntimeService {
 
     WorkflowInstance cancel(CancelWorkflowRequest request);
 
+    WorkflowInstance refresh(WorkflowInstanceId instanceId, com.datausher.platform.shared.context.RequestContext context);
+
     void handleExecutionStateChanged(ExecutionStateChangedEvent event);
 
     Optional<WorkflowInstance> findInstance(WorkflowInstanceId instanceId);

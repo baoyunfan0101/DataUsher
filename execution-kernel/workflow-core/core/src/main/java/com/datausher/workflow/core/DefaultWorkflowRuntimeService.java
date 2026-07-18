@@ -234,6 +234,12 @@ public final class DefaultWorkflowRuntimeService
     }
 
     @Override
+    public WorkflowInstance refresh(WorkflowInstanceId instanceId, RequestContext requestContext) {
+        Objects.requireNonNull(requestContext, "requestContext must not be null");
+        return requireRun(Objects.requireNonNull(instanceId, "instanceId must not be null")).instance();
+    }
+
+    @Override
     public Optional<WorkflowInstance> findInstance(WorkflowInstanceId instanceId) {
         return store.find(Objects.requireNonNull(instanceId, "instanceId must not be null"))
                 .map(StoredWorkflowRun::instance);

@@ -5,9 +5,10 @@ public enum WorkflowInstanceState {
     RUNNING,
     SUCCEEDED,
     FAILED,
+    TIMED_OUT,
     CANCELLED;
 
     public boolean terminal() {
-        return this == SUCCEEDED || this == FAILED || this == CANCELLED;
+        return this == SUCCEEDED || this == FAILED || this == TIMED_OUT || this == CANCELLED;
     }
 }

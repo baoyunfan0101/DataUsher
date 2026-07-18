@@ -10,15 +10,36 @@ import java.util.Set;
 public record WorkflowVersionSpec(
         List<WorkflowTaskDefinition> tasks,
         List<TaskDependency> dependencies,
-        Optional<WorkflowSchedule> schedule,
+        List<WorkflowSchedule> schedules,
+        WorkflowRuntimeBinding runtimeBinding,
         Map<String, String> attributes
 ) {
     public WorkflowVersionSpec {
         tasks = List.copyOf(tasks);
         dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
-        schedule = schedule == null ? Optional.empty() : schedule;
+        schedules = schedules == null ? List.of() : List.copyOf(schedules);
+        runtimeBinding = runtimeBinding == null
+                ? WorkflowRuntimeBinding.PLATFORM_MANAGED : runtimeBinding;
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
         validate(tasks, dependencies);
+        if (new HashSet<>(schedules.stream().map(WorkflowSchedule::scheduleId).toList()).size()
+                != schedules.size()) {
+            throw new IllegalArgumentException("schedule IDs must be unique");
+        }
+    }
+
+    public WorkflowVersionSpec(
+            List<WorkflowTaskDefinition> tasks,
+            List<TaskDependency> dependencies,
+            Optional<WorkflowSchedule> schedule,
+            Map<String, String> attributes
+    ) {
+        this(tasks, dependencies, schedule == null ? List.of() : schedule.stream().toList(),
+                WorkflowRuntimeBinding.PLATFORM_MANAGED, attributes);
+    }
+
+    public Optional<WorkflowSchedule> schedule() {
+        return schedules.size() == 1 ? Optional.of(schedules.getFirst()) : Optional.empty();
     }
 
     private static void validate(

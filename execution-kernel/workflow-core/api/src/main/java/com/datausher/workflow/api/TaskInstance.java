@@ -1,7 +1,5 @@
 package com.datausher.workflow.api;
 
-import com.datausher.execution.api.ExecutionRequestId;
-
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -12,8 +10,9 @@ public record TaskInstance(
         String taskKey,
         int attempt,
         TaskInstanceState state,
-        Optional<ExecutionRequestId> executionRequestId,
+        Optional<WorkflowTaskRunReference> runReference,
         Optional<Instant> nextEligibleAt,
+        Optional<Instant> deadlineAt,
         Optional<String> failureCode,
         Instant createdAt,
         Instant updatedAt,
@@ -26,8 +25,9 @@ public record TaskInstance(
                 workflowInstanceId, "workflowInstanceId must not be null");
         taskKey = WorkflowTaskDefinition.normalizeKey(taskKey);
         state = Objects.requireNonNull(state, "state must not be null");
-        executionRequestId = executionRequestId == null ? Optional.empty() : executionRequestId;
+        runReference = runReference == null ? Optional.empty() : runReference;
         nextEligibleAt = nextEligibleAt == null ? Optional.empty() : nextEligibleAt;
+        deadlineAt = deadlineAt == null ? Optional.empty() : deadlineAt;
         failureCode = failureCode == null ? Optional.empty() : failureCode;
         createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
@@ -41,5 +41,32 @@ public record TaskInstance(
         if (state != TaskInstanceState.RETRY_WAIT && nextEligibleAt.isPresent()) {
             throw new IllegalArgumentException("nextEligibleAt requires retry wait state");
         }
+    }
+
+    public TaskInstance(
+            TaskInstanceId taskInstanceId,
+            WorkflowInstanceId workflowInstanceId,
+            String taskKey,
+            int attempt,
+            TaskInstanceState state,
+            Optional<com.datausher.execution.api.ExecutionRequestId> executionRequestId,
+            Optional<Instant> nextEligibleAt,
+            Optional<String> failureCode,
+            Instant createdAt,
+            Instant updatedAt,
+            Optional<Instant> finishedAt,
+            long revision
+    ) {
+        this(taskInstanceId, workflowInstanceId, taskKey, attempt, state,
+                executionRequestId == null ? Optional.empty() : executionRequestId.map(value ->
+                        new WorkflowTaskRunReference(
+                                WorkflowTaskRunReferenceType.EXECUTION, value.value(), java.util.Map.of())),
+                nextEligibleAt, Optional.empty(), failureCode, createdAt, updatedAt, finishedAt, revision);
+    }
+
+    public Optional<com.datausher.execution.api.ExecutionRequestId> executionRequestId() {
+        return runReference
+                .filter(value -> value.type().equals(WorkflowTaskRunReferenceType.EXECUTION))
+                .map(value -> new com.datausher.execution.api.ExecutionRequestId(value.referenceId()));
     }
 }

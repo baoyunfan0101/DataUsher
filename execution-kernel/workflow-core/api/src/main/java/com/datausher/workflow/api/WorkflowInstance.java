@@ -11,6 +11,8 @@ public record WorkflowInstance(
         WorkflowInstanceId instanceId,
         WorkflowId workflowId,
         long workflowVersion,
+        WorkflowRuntimeBinding runtimeBinding,
+        Optional<WorkflowRunReference> runReference,
         String idempotencyKey,
         Map<String, ExecutionValue> parameters,
         WorkflowInstanceState state,
@@ -22,6 +24,8 @@ public record WorkflowInstance(
     public WorkflowInstance {
         instanceId = Objects.requireNonNull(instanceId, "instanceId must not be null");
         workflowId = Objects.requireNonNull(workflowId, "workflowId must not be null");
+        runtimeBinding = Objects.requireNonNull(runtimeBinding, "runtimeBinding must not be null");
+        runReference = runReference == null ? Optional.empty() : runReference;
         idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null").trim();
         parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
         state = Objects.requireNonNull(state, "state must not be null");
@@ -34,5 +38,33 @@ public record WorkflowInstance(
         if (state.terminal() != finishedAt.isPresent()) {
             throw new IllegalArgumentException("finishedAt must be present exactly for terminal states");
         }
+        if (runtimeBinding.runtimeType().equals(WorkflowRuntimeType.PLATFORM_MANAGED)
+                && runReference.isPresent()) {
+            throw new IllegalArgumentException("platform-managed instance must not have scheduler run reference");
+        }
+        if (runReference.isPresent()) {
+            WorkflowRunReference reference = runReference.orElseThrow();
+            if (!runtimeBinding.adapterId().orElseThrow().equals(reference.adapterId())
+                    || !runtimeBinding.bindingId().orElseThrow().equals(reference.bindingId())) {
+                throw new IllegalArgumentException("scheduler run reference must match runtime binding");
+            }
+        }
+    }
+
+    public WorkflowInstance(
+            WorkflowInstanceId instanceId,
+            WorkflowId workflowId,
+            long workflowVersion,
+            String idempotencyKey,
+            Map<String, ExecutionValue> parameters,
+            WorkflowInstanceState state,
+            Instant createdAt,
+            Instant updatedAt,
+            Optional<Instant> finishedAt,
+            long revision
+    ) {
+        this(instanceId, workflowId, workflowVersion, WorkflowRuntimeBinding.PLATFORM_MANAGED,
+                Optional.empty(), idempotencyKey, parameters, state, createdAt, updatedAt,
+                finishedAt, revision);
     }
 }
