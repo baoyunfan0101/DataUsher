@@ -67,6 +67,22 @@ project(":platform-kernel:observability-core") {
     }
 }
 
+project(":platform-kernel:notification-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":platform-kernel:notification-core") {
+    dependencies {
+        api project(":platform-kernel:notification-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:audit-core")
+        testImplementation project(":platform-kernel:shared-types-core")
+    }
+}
+
 project(":governance-kernel:project-environment-api") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
@@ -109,6 +125,48 @@ project(":governance-kernel:identity-access-core") {
         implementation project(":governance-kernel:resource-registry-api")
         implementation project(":platform-kernel:audit-api")
         implementation project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:resource-ownership-api") {
+    dependencies {
+        api project(":governance-kernel:identity-access-api")
+        api project(":governance-kernel:resource-registry-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:resource-ownership-core") {
+    dependencies {
+        api project(":governance-kernel:resource-ownership-api")
+        implementation project(":governance-kernel:identity-access-api")
+        implementation project(":governance-kernel:resource-registry-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:audit-core")
+        testImplementation project(":platform-kernel:shared-types-core")
+    }
+}
+
+project(":governance-kernel:approval-api") {
+    dependencies {
+        api project(":governance-kernel:identity-access-api")
+        api project(":governance-kernel:resource-ownership-api")
+        api project(":governance-kernel:resource-registry-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":governance-kernel:approval-core") {
+    dependencies {
+        api project(":governance-kernel:approval-api")
+        implementation project(":governance-kernel:identity-access-api")
+        implementation project(":governance-kernel:resource-ownership-api")
+        implementation project(":governance-kernel:resource-registry-api")
+        implementation project(":platform-kernel:audit-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:audit-core")
+        testImplementation project(":platform-kernel:shared-types-core")
     }
 }
 
@@ -232,9 +290,12 @@ project(":datausher-app") {
         implementation project(":platform-kernel:configuration-core")
         implementation project(":platform-kernel:audit-core")
         implementation project(":platform-kernel:observability-core")
+        implementation project(":platform-kernel:notification-core")
         implementation project(":governance-kernel:project-environment-core")
         implementation project(":governance-kernel:resource-registry-core")
         implementation project(":governance-kernel:identity-access-core")
+        implementation project(":governance-kernel:resource-ownership-core")
+        implementation project(":governance-kernel:approval-core")
         implementation project(":integration-kernel:integration-runtime-core")
         implementation project(":integration-kernel:datasource-adapters-api")
         implementation project(":integration-kernel:compute-engine-adapters-api")
@@ -264,12 +325,18 @@ configure([
         project(":platform-kernel:audit-core"),
         project(":platform-kernel:observability-api"),
         project(":platform-kernel:observability-core"),
+        project(":platform-kernel:notification-api"),
+        project(":platform-kernel:notification-core"),
         project(":governance-kernel:project-environment-api"),
         project(":governance-kernel:project-environment-core"),
         project(":governance-kernel:resource-registry-api"),
         project(":governance-kernel:resource-registry-core"),
         project(":governance-kernel:identity-access-api"),
         project(":governance-kernel:identity-access-core"),
+        project(":governance-kernel:resource-ownership-api"),
+        project(":governance-kernel:resource-ownership-core"),
+        project(":governance-kernel:approval-api"),
+        project(":governance-kernel:approval-core"),
         project(":integration-kernel:integration-runtime-api"),
         project(":integration-kernel:integration-runtime-core"),
         project(":integration-kernel:datasource-adapters-api"),
@@ -327,6 +394,14 @@ def allowedProjectDependencies = [
         ":platform-kernel:observability-core": [
                 ":platform-kernel:observability-api"
         ] as Set,
+        ":platform-kernel:notification-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":platform-kernel:notification-core": [
+                ":platform-kernel:notification-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
         ":governance-kernel:project-environment-api": [
                 ":platform-kernel:shared-types-api"
         ] as Set,
@@ -350,6 +425,32 @@ def allowedProjectDependencies = [
         ] as Set,
         ":governance-kernel:identity-access-core": [
                 ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:resource-ownership-api": [
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:resource-ownership-core": [
+                ":governance-kernel:resource-ownership-api",
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:audit-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:approval-api": [
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-ownership-api",
+                ":governance-kernel:resource-registry-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":governance-kernel:approval-core": [
+                ":governance-kernel:approval-api",
+                ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-ownership-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:audit-api",
                 ":platform-kernel:shared-types-api"
@@ -429,9 +530,12 @@ def allowedProjectDependencies = [
                 ":platform-kernel:configuration-core",
                 ":platform-kernel:audit-core",
                 ":platform-kernel:observability-core",
+                ":platform-kernel:notification-core",
                 ":governance-kernel:project-environment-core",
                 ":governance-kernel:resource-registry-core",
                 ":governance-kernel:identity-access-core",
+                ":governance-kernel:resource-ownership-core",
+                ":governance-kernel:approval-core",
                 ":integration-kernel:integration-runtime-core",
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",

@@ -25,12 +25,18 @@ include(
     "platform-kernel:audit-core",
     "platform-kernel:observability-api",
     "platform-kernel:observability-core",
+    "platform-kernel:notification-api",
+    "platform-kernel:notification-core",
     "governance-kernel:project-environment-api",
     "governance-kernel:project-environment-core",
     "governance-kernel:resource-registry-api",
     "governance-kernel:resource-registry-core",
     "governance-kernel:identity-access-api",
     "governance-kernel:identity-access-core",
+    "governance-kernel:resource-ownership-api",
+    "governance-kernel:resource-ownership-core",
+    "governance-kernel:approval-api",
+    "governance-kernel:approval-core",
     "integration-kernel:integration-runtime-api",
     "integration-kernel:integration-runtime-core",
     "integration-kernel:datasource-adapters-api",
@@ -71,6 +77,10 @@ project(":platform-kernel:observability-api").projectDir =
         file("platform-kernel/observability/api")
 project(":platform-kernel:observability-core").projectDir =
         file("platform-kernel/observability/core")
+project(":platform-kernel:notification-api").projectDir =
+        file("platform-kernel/notification/api")
+project(":platform-kernel:notification-core").projectDir =
+        file("platform-kernel/notification/core")
 project(":governance-kernel:project-environment-api").projectDir =
         file("governance-kernel/project-environment/api")
 project(":governance-kernel:project-environment-core").projectDir =
@@ -83,6 +93,14 @@ project(":governance-kernel:identity-access-api").projectDir =
         file("governance-kernel/identity-access/api")
 project(":governance-kernel:identity-access-core").projectDir =
         file("governance-kernel/identity-access/core")
+project(":governance-kernel:resource-ownership-api").projectDir =
+        file("governance-kernel/resource-ownership/api")
+project(":governance-kernel:resource-ownership-core").projectDir =
+        file("governance-kernel/resource-ownership/core")
+project(":governance-kernel:approval-api").projectDir =
+        file("governance-kernel/approval/api")
+project(":governance-kernel:approval-core").projectDir =
+        file("governance-kernel/approval/core")
 project(":integration-kernel:integration-runtime-api").projectDir =
         file("integration-kernel/integration-runtime/api")
 project(":integration-kernel:integration-runtime-core").projectDir =

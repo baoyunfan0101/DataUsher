@@ -40,4 +40,11 @@ class AccessContractTest {
                 Instant.parse("2026-07-17T00:00:00Z")
         ));
     }
+
+    @Test
+    void subjectTypesAreOpenForExtension() {
+        SubjectRef workload = new SubjectRef(new SubjectType("workload-identity"), "job-1");
+
+        assertEquals("workload-identity:job-1", workload.canonicalValue());
+    }
 }
