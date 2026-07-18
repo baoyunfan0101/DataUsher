@@ -13,3 +13,6 @@ provides default lifecycle services and replaceable stores.
 - Create a new immutable workflow version for every task, dependency, schedule, or policy change.
 - Use open schedule and dependency condition values for adapter-specific extensions.
 - Keep task graphs acyclic and use workflow revisions for concurrent changes.
+- Trigger workflows idempotently, then let `WorkflowWorker` dispatch ready tasks.
+- Use `ExecutionStateChangedEvent` to advance task dependencies and retries.
+- Query task logs and results through execution-core using the stored execution request reference.
