@@ -7,6 +7,7 @@ import com.datausher.platform.audit.core.CompensatingAuditedCommandExecutor;
 import com.datausher.platform.audit.core.DefaultAuditService;
 import com.datausher.platform.audit.core.InMemoryAuditEventStore;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.context.ActorContext;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,14 +55,17 @@ class DefaultApprovalServiceTest {
                 "publish-daily-orders", Map.of(), context)));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok", context));
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(reviewer, "decision-1")));
         assertEquals(ApprovalRequestStatus.PENDING, request.status());
         assertEquals(ApprovalStepStatus.ACTIVE, request.steps().get(1).status());
         assertEquals(request, service.decide(new DecideApprovalRequest(
-                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok", context)));
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(reviewer, "decision-1-retry"))));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), "operate", operator, ApprovalDecisionType.APPROVE, "ok", context));
+                request.requestId(), "operate", operator, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(operator, "decision-2")));
         assertEquals(ApprovalRequestStatus.APPROVED, request.status());
         assertEquals(1, request.templateVersion());
     }
@@ -82,10 +87,33 @@ class DefaultApprovalServiceTest {
                 "publish-daily-orders", Map.of(), context));
 
         request = service.decide(new DecideApprovalRequest(
-                request.requestId(), "review", reviewer, ApprovalDecisionType.REJECT, "unsafe", context));
+                request.requestId(), "review", reviewer, ApprovalDecisionType.REJECT, "unsafe",
+                contextFor(reviewer, "decision-1")));
 
         assertEquals(ApprovalRequestStatus.REJECTED, request.status());
         assertEquals(ApprovalStepStatus.REJECTED, request.steps().get(0).status());
+    }
+
+    @Test
+    void rejectsDecisionImpersonation() {
+        ResourceRef target = ResourceRef.global("workflow", "daily-orders");
+        SubjectRef requester = new SubjectRef(SubjectType.USER, "requester");
+        SubjectRef reviewer = new SubjectRef(SubjectType.USER, "reviewer");
+        SubjectRef attacker = new SubjectRef(SubjectType.USER, "attacker");
+        DefaultApprovalService service = service(target, List.of(requester, reviewer, attacker));
+        RequestContext context = RequestContext.system("request-1", Instant.now());
+        ApprovalTemplateKey key = new ApprovalTemplateKey("workflow-publish");
+        service.publishTemplate(new PublishApprovalTemplateRequest(
+                key, "Workflow Publish", new ApprovalPurpose("workflow-publish"),
+                List.of(new ApprovalStepDefinition("review", "Review",
+                        List.of(ApproverSelector.subject(reviewer)), 1)), Map.of(), context));
+        ApprovalRequest request = service.submit(new SubmitApprovalRequest(
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context));
+
+        assertThrows(SecurityException.class, () -> service.decide(new DecideApprovalRequest(
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(attacker, "decision-1"))));
     }
 
     private static DefaultApprovalService service(ResourceRef target, List<SubjectRef> subjects) {
@@ -94,8 +122,20 @@ class DefaultApprovalServiceTest {
         var audit = new DefaultAuditService(new InMemoryAuditEventStore(), ids, clock);
         return new DefaultApprovalService(
                 new InMemoryApprovalStore(), resources(target), identities(subjects),
+                new AuthenticatedSubjectDecisionAuthorizer(),
                 List.of(new DirectSubjectApproverResolver()), ids, clock,
                 new CompensatingAuditedCommandExecutor(audit), ApprovalTerminalHandler.noop());
+    }
+
+    private static RequestContext contextFor(SubjectRef subjectRef, String requestId) {
+        return new RequestContext(
+                requestId,
+                new ActorContext(
+                        subjectRef.subjectId(), subjectRef.subjectId(),
+                        Set.of(subjectRef.canonicalValue()), Map.of()),
+                Instant.now(),
+                Map.of()
+        );
     }
 
     private static ResourceQueryService resources(ResourceRef ref) {

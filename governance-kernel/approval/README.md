@@ -14,6 +14,7 @@ default lifecycle services.
 - Register an `ApproverSelectorResolver` for every selector type used by a template.
 - Use resource-owner selectors when approval responsibility follows resource ownership.
 - Address every decision to an explicit template step key.
+- Bind decision subjects to authenticated actor subjects through `ApprovalDecisionAuthorizer`.
 - Register callback handlers before requests of that callback type reach terminal callback delivery.
 - Make callback handlers idempotent by `ApprovalRequestId` and use the correlation key for business lookup.
 - Query callback delivery state and retry failed deliveries through `ApprovalCallbackDeliveryService`.

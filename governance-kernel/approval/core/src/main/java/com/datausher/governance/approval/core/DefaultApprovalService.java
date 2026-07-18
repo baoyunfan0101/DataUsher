@@ -23,6 +23,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     private final ApprovalStore store;
     private final ResourceQueryService resources;
     private final IdentityQueryService identities;
+    private final ApprovalDecisionAuthorizer decisionAuthorizer;
     private final Map<ApproverSelectorType, ApproverSelectorResolver> resolvers;
     private final IdGenerator idGenerator;
     private final Clock clock;
@@ -33,6 +34,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
             ApprovalStore store,
             ResourceQueryService resources,
             IdentityQueryService identities,
+            ApprovalDecisionAuthorizer decisionAuthorizer,
             Collection<? extends ApproverSelectorResolver> resolvers,
             IdGenerator idGenerator,
             Clock clock,
@@ -42,6 +44,8 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.resources = Objects.requireNonNull(resources, "resources must not be null");
         this.identities = Objects.requireNonNull(identities, "identities must not be null");
+        this.decisionAuthorizer = Objects.requireNonNull(
+                decisionAuthorizer, "decisionAuthorizer must not be null");
         this.resolvers = indexResolvers(resolvers);
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -129,6 +133,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
                         "approval request does not exist: " + request.requestId()));
         int activeIndex = stepIndex(current, request.stepKey());
         ApprovalStep active = current.steps().get(activeIndex);
+        decisionAuthorizer.authorize(current, active, request.approver(), request.requestContext());
         Optional<ApprovalStepDecision> previousDecision = active.decisions().stream()
                 .filter(decision -> decision.approver().equals(request.approver()))
                 .findFirst();

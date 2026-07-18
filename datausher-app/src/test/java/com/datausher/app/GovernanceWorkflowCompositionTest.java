@@ -22,6 +22,7 @@ import com.datausher.governance.approval.api.PublishApprovalTemplateRequest;
 import com.datausher.governance.approval.api.SubmitApprovalRequest;
 import com.datausher.governance.approval.core.DefaultApprovalCallbackRegistry;
 import com.datausher.governance.approval.core.DefaultApprovalService;
+import com.datausher.governance.approval.core.AuthenticatedSubjectDecisionAuthorizer;
 import com.datausher.governance.approval.core.DirectSubjectApproverResolver;
 import com.datausher.governance.approval.core.InMemoryApprovalCallbackStore;
 import com.datausher.governance.approval.core.InMemoryApprovalStore;
@@ -55,6 +56,7 @@ import com.datausher.platform.notification.core.DefaultNotificationService;
 import com.datausher.platform.notification.core.InMemoryNotificationStore;
 import com.datausher.platform.notification.core.StrictNotificationTemplateRenderer;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.context.ActorContext;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.time.core.SystemClock;
 import org.junit.jupiter.api.Test;
@@ -102,6 +104,7 @@ class GovernanceWorkflowCompositionTest {
                 new InMemoryApprovalCallbackStore(), clock, audit);
         var approvals = new DefaultApprovalService(
                 new InMemoryApprovalStore(), resources, identities,
+                new AuthenticatedSubjectDecisionAuthorizer(),
                 List.of(new DirectSubjectApproverResolver(), new ResourceOwnerApproverResolver(ownership)),
                 ids, clock, auditedCommands, callbacks);
         RequestContext context = RequestContext.system("request-1", Instant.now());
@@ -152,7 +155,13 @@ class GovernanceWorkflowCompositionTest {
                 "publish-daily-orders", Map.of(), context));
         request = approvals.decide(new DecideApprovalRequest(
                 request.requestId(), "owner-review", owner,
-                ApprovalDecisionType.APPROVE, "approved", context));
+                ApprovalDecisionType.APPROVE, "approved",
+                new RequestContext(
+                        "decision-1",
+                        new ActorContext(
+                                owner.subjectId(), owner.subjectId(),
+                                Set.of(owner.canonicalValue()), Map.of()),
+                        Instant.now(), Map.of())));
 
         assertEquals(ApprovalRequestStatus.APPROVED, request.status());
         assertEquals(ApprovalCallbackDeliveryStatus.SUCCEEDED,
