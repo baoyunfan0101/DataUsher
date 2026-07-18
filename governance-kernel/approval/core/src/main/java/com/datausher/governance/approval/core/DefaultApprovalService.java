@@ -65,7 +65,8 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
                 .orElse(1L);
         ApprovalTemplate template = new ApprovalTemplate(
                 request.templateKey(), version, request.displayName(), request.purpose(), request.steps(),
-                clock.now(), request.requestContext().actor().actorId(), request.attributes());
+                ApprovalTemplateStatus.ACTIVE, clock.now(),
+                request.requestContext().actor().actorId(), request.attributes());
         return commandExecutor.execute(new AuditedCommand<>() {
             @Override
             public ApprovalTemplate execute() {
@@ -89,6 +90,41 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
     }
 
     @Override
+    public ApprovalTemplate changeTemplateStatus(ChangeApprovalTemplateStatusRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        ApprovalTemplate current = store.findTemplate(request.templateKey(), request.version())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "approval template does not exist: " + request.templateKey()));
+        if (current.status() == request.status()) {
+            return current;
+        }
+        ApprovalTemplate replacement = new ApprovalTemplate(
+                current.templateKey(), current.version(), current.displayName(), current.purpose(),
+                current.steps(), request.status(), current.publishedAt(), current.publishedBy(), current.attributes());
+        return commandExecutor.execute(new AuditedCommand<>() {
+            @Override
+            public ApprovalTemplate execute() {
+                store.updateTemplate(current, replacement);
+                return replacement;
+            }
+
+            @Override
+            public AuditRecordRequest audit(ApprovalTemplate result) {
+                return new AuditRecordRequest(
+                        request.requestContext(), "approval", "approval-template.change-status",
+                        AuditTarget.global("approval-template", result.templateKey().value()),
+                        AuditOutcome.SUCCEEDED,
+                        Map.of("version", Long.toString(result.version()), "status", result.status().name()));
+            }
+
+            @Override
+            public void rollback(ApprovalTemplate result, RuntimeException cause) {
+                store.updateTemplate(replacement, current);
+            }
+        });
+    }
+
+    @Override
     public ApprovalRequest submit(SubmitApprovalRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         Optional<ApprovalRequest> existing = store.findRequestByIdempotencyKey(request.idempotencyKey());
@@ -103,6 +139,9 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         ApprovalTemplate template = store.findLatestTemplate(request.templateKey())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "approval template does not exist: " + request.templateKey()));
+        if (template.status() != ApprovalTemplateStatus.ACTIVE) {
+            throw new IllegalStateException("approval template is not active: " + request.templateKey());
+        }
         List<ApprovalStep> steps = resolveSteps(template, request.targetResource());
         ApprovalRequest approval = new ApprovalRequest(
                 new ApprovalRequestId(idGenerator.nextIdValue(
@@ -231,8 +270,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
 
     private List<ApprovalStep> resolveSteps(ApprovalTemplate template, com.datausher.governance.resource.api.ResourceRef target) {
         List<ApprovalStep> steps = new ArrayList<>();
-        for (int index = 0; index < template.steps().size(); index++) {
-            ApprovalStepDefinition definition = template.steps().get(index);
+        for (ApprovalStepDefinition definition : template.steps()) {
             Set<SubjectRef> approvers = definition.approverSelectors().stream()
                     .map(selector -> resolver(selector.type()).resolve(selector, target))
                     .flatMap(Collection::stream)
@@ -244,7 +282,9 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
             }
             steps.add(new ApprovalStep(
                     definition.stepKey(), definition.displayName(), approvers, definition.requiredApprovals(),
-                    index == 0 ? ApprovalStepStatus.ACTIVE : ApprovalStepStatus.WAITING, List.of()));
+                    definition.dependsOn(),
+                    definition.dependsOn().isEmpty() ? ApprovalStepStatus.ACTIVE : ApprovalStepStatus.WAITING,
+                    List.of()));
         }
         return List.copyOf(steps);
     }
@@ -256,8 +296,11 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
         decisions.add(new ApprovalStepDecision(request.approver(), request.decision(), request.comment(), clock.now()));
         if (request.decision() == ApprovalDecisionType.REJECT) {
             steps.set(activeIndex, withDecisions(active, ApprovalStepStatus.REJECTED, decisions));
-            for (int index = activeIndex + 1; index < steps.size(); index++) {
-                steps.set(index, withStatus(steps.get(index), ApprovalStepStatus.SKIPPED));
+            for (int index = 0; index < steps.size(); index++) {
+                ApprovalStep step = steps.get(index);
+                if (index != activeIndex && step.status() != ApprovalStepStatus.APPROVED) {
+                    steps.set(index, withStatus(step, ApprovalStepStatus.SKIPPED));
+                }
             }
             return copy(current, ApprovalRequestStatus.REJECTED, steps, clock.now());
         }
@@ -269,11 +312,21 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
             return copy(current, ApprovalRequestStatus.PENDING, steps, null);
         }
         steps.set(activeIndex, withDecisions(active, ApprovalStepStatus.APPROVED, decisions));
-        if (activeIndex + 1 < steps.size()) {
-            steps.set(activeIndex + 1, withStatus(steps.get(activeIndex + 1), ApprovalStepStatus.ACTIVE));
-            return copy(current, ApprovalRequestStatus.PENDING, steps, null);
+        Set<String> approvedSteps = steps.stream()
+                .filter(step -> step.status() == ApprovalStepStatus.APPROVED)
+                .map(ApprovalStep::stepKey)
+                .collect(Collectors.toSet());
+        for (int index = 0; index < steps.size(); index++) {
+            ApprovalStep step = steps.get(index);
+            if (step.status() == ApprovalStepStatus.WAITING
+                    && approvedSteps.containsAll(step.dependsOn())) {
+                steps.set(index, withStatus(step, ApprovalStepStatus.ACTIVE));
+            }
         }
-        return copy(current, ApprovalRequestStatus.APPROVED, steps, clock.now());
+        if (steps.stream().allMatch(step -> step.status() == ApprovalStepStatus.APPROVED)) {
+            return copy(current, ApprovalRequestStatus.APPROVED, steps, clock.now());
+        }
+        return copy(current, ApprovalRequestStatus.PENDING, steps, null);
     }
 
     private ApprovalRequest updateWithAudit(
@@ -363,7 +416,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
 
     private static ApprovalStep withStatus(ApprovalStep step, ApprovalStepStatus status) {
         return new ApprovalStep(step.stepKey(), step.displayName(), step.eligibleApprovers(),
-                step.requiredApprovals(), status, step.decisions());
+                step.requiredApprovals(), step.dependsOn(), status, step.decisions());
     }
 
     private static ApprovalStep withDecisions(
@@ -372,7 +425,7 @@ public final class DefaultApprovalService implements ApprovalCommandService, App
             List<ApprovalStepDecision> decisions
     ) {
         return new ApprovalStep(step.stepKey(), step.displayName(), step.eligibleApprovers(),
-                step.requiredApprovals(), status, decisions);
+                step.requiredApprovals(), step.dependsOn(), status, decisions);
     }
 
     private static ApprovalRequest copy(

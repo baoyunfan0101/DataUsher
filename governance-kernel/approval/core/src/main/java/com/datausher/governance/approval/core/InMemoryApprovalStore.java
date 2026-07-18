@@ -62,6 +62,18 @@ public final class InMemoryApprovalStore implements ApprovalStore {
     }
 
     @Override
+    public void updateTemplate(ApprovalTemplate expected, ApprovalTemplate replacement) {
+        if (!expected.templateKey().equals(replacement.templateKey())
+                || expected.version() != replacement.version()) {
+            throw new IllegalArgumentException("approval template identifiers must match");
+        }
+        if (!templates.replace(
+                templateKey(expected.templateKey(), expected.version()), expected, replacement)) {
+            throw new IllegalStateException("approval template changed concurrently: " + expected.templateKey());
+        }
+    }
+
+    @Override
     public Optional<ApprovalRequest> findRequest(ApprovalRequestId requestId) {
         return Optional.ofNullable(requests.get(requestId.value()));
     }

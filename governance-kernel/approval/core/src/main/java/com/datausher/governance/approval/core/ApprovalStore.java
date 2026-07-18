@@ -22,6 +22,8 @@ public interface ApprovalStore {
 
     void deleteTemplate(ApprovalTemplate template);
 
+    void updateTemplate(ApprovalTemplate expected, ApprovalTemplate replacement);
+
     Optional<ApprovalRequest> findRequest(ApprovalRequestId requestId);
 
     Optional<ApprovalRequest> findRequestByIdempotencyKey(String idempotencyKey);

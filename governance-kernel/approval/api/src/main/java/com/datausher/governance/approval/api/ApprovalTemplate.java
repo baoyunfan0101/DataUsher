@@ -11,6 +11,7 @@ public record ApprovalTemplate(
         String displayName,
         ApprovalPurpose purpose,
         List<ApprovalStepDefinition> steps,
+        ApprovalTemplateStatus status,
         Instant publishedAt,
         String publishedBy,
         Map<String, String> attributes
@@ -23,6 +24,7 @@ public record ApprovalTemplate(
         displayName = Objects.requireNonNull(displayName, "displayName must not be null").trim();
         purpose = Objects.requireNonNull(purpose, "purpose must not be null");
         steps = List.copyOf(Objects.requireNonNull(steps, "steps must not be null"));
+        status = Objects.requireNonNull(status, "status must not be null");
         publishedAt = Objects.requireNonNull(publishedAt, "publishedAt must not be null");
         publishedBy = Objects.requireNonNull(publishedBy, "publishedBy must not be null").trim();
         attributes = attributes == null ? Map.of() : Map.copyOf(attributes);

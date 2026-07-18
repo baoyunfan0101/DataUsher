@@ -69,7 +69,7 @@ class DefaultApprovalCallbackRegistryTest {
     private static ApprovalRequest terminalApproval(ApprovalCallbackType type) {
         SubjectRef subject = new SubjectRef(SubjectType.USER, "approver");
         ApprovalStep step = new ApprovalStep(
-                "review", "Review", Set.of(subject), 1, ApprovalStepStatus.APPROVED, List.of());
+                "review", "Review", Set.of(subject), 1, Set.of(), ApprovalStepStatus.APPROVED, List.of());
         return new ApprovalRequest(
                 new ApprovalRequestId("approval-1"), new ApprovalTemplateKey("workflow-publish"), 1,
                 new ApprovalPurpose("workflow-publish"), "Publish", ResourceRef.global("workflow", "daily"),

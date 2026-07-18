@@ -3,6 +3,8 @@ package com.datausher.governance.approval.api;
 public interface ApprovalCommandService {
     ApprovalTemplate publishTemplate(PublishApprovalTemplateRequest request);
 
+    ApprovalTemplate changeTemplateStatus(ChangeApprovalTemplateStatusRequest request);
+
     ApprovalRequest submit(SubmitApprovalRequest request);
 
     ApprovalRequest decide(DecideApprovalRequest request);

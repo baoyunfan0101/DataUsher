@@ -44,7 +44,7 @@ class DefaultApprovalServiceTest {
                         new ApprovalStepDefinition("review", "Review",
                                 List.of(ApproverSelector.subject(reviewer)), 1),
                         new ApprovalStepDefinition("operate", "Operate",
-                                List.of(ApproverSelector.subject(operator)), 1)
+                                List.of(ApproverSelector.subject(operator)), 1, Set.of("review"))
                 ), Map.of(), context));
         ApprovalRequest request = service.submit(new SubmitApprovalRequest(
                 key, "Publish daily orders", target, requester, null,
@@ -120,6 +120,74 @@ class DefaultApprovalServiceTest {
         assertThrows(SecurityException.class, () -> service.decide(new DecideApprovalRequest(
                 request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok",
                 contextFor(attacker, "decision-1"))));
+    }
+
+    @Test
+    void activatesDependentStepAfterEveryParallelDependencyIsApproved() {
+        ResourceRef target = ResourceRef.global("workflow", "daily-orders");
+        SubjectRef requester = new SubjectRef(SubjectType.USER, "requester");
+        SubjectRef reviewer = new SubjectRef(SubjectType.USER, "reviewer");
+        SubjectRef operator = new SubjectRef(SubjectType.USER, "operator");
+        SubjectRef publisher = new SubjectRef(SubjectType.USER, "publisher");
+        DefaultApprovalService service = service(
+                target, List.of(requester, reviewer, operator, publisher));
+        RequestContext context = RequestContext.system("request-1", Instant.now());
+        ApprovalTemplateKey key = new ApprovalTemplateKey("workflow-publish");
+        service.publishTemplate(new PublishApprovalTemplateRequest(
+                key, "Workflow Publish", new ApprovalPurpose("workflow-publish"),
+                List.of(
+                        new ApprovalStepDefinition("review", "Review",
+                                List.of(ApproverSelector.subject(reviewer)), 1),
+                        new ApprovalStepDefinition("operate", "Operate",
+                                List.of(ApproverSelector.subject(operator)), 1),
+                        new ApprovalStepDefinition("publish", "Publish",
+                                List.of(ApproverSelector.subject(publisher)), 1,
+                                Set.of("review", "operate"))
+                ), Map.of(), context));
+        ApprovalRequest request = service.submit(new SubmitApprovalRequest(
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context));
+
+        assertEquals(ApprovalStepStatus.ACTIVE, request.steps().get(0).status());
+        assertEquals(ApprovalStepStatus.ACTIVE, request.steps().get(1).status());
+        assertEquals(ApprovalStepStatus.WAITING, request.steps().get(2).status());
+
+        request = service.decide(new DecideApprovalRequest(
+                request.requestId(), "review", reviewer, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(reviewer, "decision-1")));
+        assertEquals(ApprovalStepStatus.WAITING, request.steps().get(2).status());
+
+        request = service.decide(new DecideApprovalRequest(
+                request.requestId(), "operate", operator, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(operator, "decision-2")));
+        assertEquals(ApprovalStepStatus.ACTIVE, request.steps().get(2).status());
+
+        request = service.decide(new DecideApprovalRequest(
+                request.requestId(), "publish", publisher, ApprovalDecisionType.APPROVE, "ok",
+                contextFor(publisher, "decision-3")));
+        assertEquals(ApprovalRequestStatus.APPROVED, request.status());
+    }
+
+    @Test
+    void retiredLatestTemplateBlocksNewSubmissions() {
+        ResourceRef target = ResourceRef.global("workflow", "daily-orders");
+        SubjectRef requester = new SubjectRef(SubjectType.USER, "requester");
+        SubjectRef reviewer = new SubjectRef(SubjectType.USER, "reviewer");
+        DefaultApprovalService service = service(target, List.of(requester, reviewer));
+        RequestContext context = RequestContext.system("request-1", Instant.now());
+        ApprovalTemplateKey key = new ApprovalTemplateKey("workflow-publish");
+        ApprovalTemplate template = service.publishTemplate(new PublishApprovalTemplateRequest(
+                key, "Workflow Publish", new ApprovalPurpose("workflow-publish"),
+                List.of(new ApprovalStepDefinition("review", "Review",
+                        List.of(ApproverSelector.subject(reviewer)), 1)), Map.of(), context));
+
+        template = service.changeTemplateStatus(new ChangeApprovalTemplateStatusRequest(
+                key, template.version(), ApprovalTemplateStatus.RETIRED, context));
+
+        assertEquals(ApprovalTemplateStatus.RETIRED, template.status());
+        assertThrows(IllegalStateException.class, () -> service.submit(new SubmitApprovalRequest(
+                key, "Publish daily orders", target, requester, null,
+                "publish-daily-orders", Map.of(), context)));
     }
 
     private static DefaultApprovalService service(ResourceRef target, List<SubjectRef> subjects) {

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,5 +47,29 @@ class ApprovalContractTest {
                 Map.of(),
                 RequestContext.system("request-1", Instant.parse("2026-07-18T00:00:00Z"))
         ));
+    }
+
+    @Test
+    void missingAndCyclicDependenciesAreRejected() {
+        var selector = ApproverSelector.subject(new SubjectRef(SubjectType.USER, "approver-1"));
+        RequestContext context = RequestContext.system(
+                "request-1", Instant.parse("2026-07-18T00:00:00Z"));
+
+        assertThrows(IllegalArgumentException.class, () -> new PublishApprovalTemplateRequest(
+                new ApprovalTemplateKey("publish-task"), "Publish Task",
+                new ApprovalPurpose("task-publish"),
+                List.of(new ApprovalStepDefinition(
+                        "review", "Review", List.of(selector), 1, Set.of("missing"))),
+                Map.of(), context));
+
+        assertThrows(IllegalArgumentException.class, () -> new PublishApprovalTemplateRequest(
+                new ApprovalTemplateKey("publish-task"), "Publish Task",
+                new ApprovalPurpose("task-publish"),
+                List.of(
+                        new ApprovalStepDefinition(
+                                "review", "Review", List.of(selector), 1, Set.of("operate")),
+                        new ApprovalStepDefinition(
+                                "operate", "Operate", List.of(selector), 1, Set.of("review"))
+                ), Map.of(), context));
     }
 }

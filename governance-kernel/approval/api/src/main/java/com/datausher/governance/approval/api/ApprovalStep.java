@@ -11,6 +11,7 @@ public record ApprovalStep(
         String displayName,
         Set<SubjectRef> eligibleApprovers,
         int requiredApprovals,
+        Set<String> dependsOn,
         ApprovalStepStatus status,
         List<ApprovalStepDecision> decisions
 ) {
@@ -19,6 +20,7 @@ public record ApprovalStep(
         displayName = Objects.requireNonNull(displayName, "displayName must not be null");
         eligibleApprovers = Set.copyOf(Objects.requireNonNull(
                 eligibleApprovers, "eligibleApprovers must not be null"));
+        dependsOn = Set.copyOf(Objects.requireNonNull(dependsOn, "dependsOn must not be null"));
         status = Objects.requireNonNull(status, "status must not be null");
         decisions = List.copyOf(Objects.requireNonNull(decisions, "decisions must not be null"));
         if (eligibleApprovers.isEmpty() || requiredApprovals < 1 || requiredApprovals > eligibleApprovers.size()) {
