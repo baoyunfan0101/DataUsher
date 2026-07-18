@@ -158,6 +158,7 @@ project(":datausher-app") {
         implementation project(":integration-kernel:compute-engine-adapters-api")
         implementation project(":integration-kernel:scheduler-adapters-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
+        testImplementation project(":integration-kernel:adapter-contract-tests")
     }
 
     application {
