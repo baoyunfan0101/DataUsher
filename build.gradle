@@ -197,6 +197,8 @@ project(":datausher-app") {
         implementation project(":integration-kernel:compute-engine-adapters-api")
         implementation project(":integration-kernel:scheduler-adapters-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
+        implementation project(":data-kernel:datasource-connectivity-core")
+        implementation project(":data-kernel:metadata-catalog-core")
         testImplementation project(":integration-kernel:adapter-contract-tests")
     }
 
@@ -359,7 +361,9 @@ def allowedProjectDependencies = [
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",
                 ":integration-kernel:scheduler-adapters-api",
-                ":integration-kernel:llm-provider-adapters-api"
+                ":integration-kernel:llm-provider-adapters-api",
+                ":data-kernel:datasource-connectivity-core",
+                ":data-kernel:metadata-catalog-core"
         ] as Set
 ]
 
