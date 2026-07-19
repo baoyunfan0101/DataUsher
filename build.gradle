@@ -244,6 +244,7 @@ project(":data-kernel:quality-profiler-core") {
         api project(":data-kernel:quality-profiler-api")
         implementation project(":execution-kernel:execution-core-api")
         implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:shared-types-core")
     }
 }
 
