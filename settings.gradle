@@ -48,6 +48,10 @@ include(
     "data-kernel:datasource-connectivity-core",
     "data-kernel:metadata-catalog-api",
     "data-kernel:metadata-catalog-core",
+    "data-kernel:lineage-api",
+    "data-kernel:lineage-core",
+    "data-kernel:quality-profiler-api",
+    "data-kernel:quality-profiler-core",
     "execution-kernel:execution-core-api",
     "execution-kernel:execution-core-core",
     "execution-kernel:execution-sql-api",
@@ -127,6 +131,14 @@ project(":data-kernel:metadata-catalog-api").projectDir =
         file("data-kernel/metadata-catalog/api")
 project(":data-kernel:metadata-catalog-core").projectDir =
         file("data-kernel/metadata-catalog/core")
+project(":data-kernel:lineage-api").projectDir =
+        file("data-kernel/lineage/api")
+project(":data-kernel:lineage-core").projectDir =
+        file("data-kernel/lineage/core")
+project(":data-kernel:quality-profiler-api").projectDir =
+        file("data-kernel/quality-profiler/api")
+project(":data-kernel:quality-profiler-core").projectDir =
+        file("data-kernel/quality-profiler/core")
 project(":execution-kernel:execution-core-api").projectDir =
         file("execution-kernel/execution-core/api")
 project(":execution-kernel:execution-core-core").projectDir =
