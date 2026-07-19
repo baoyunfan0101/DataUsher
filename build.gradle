@@ -234,7 +234,6 @@ project(":data-kernel:lineage-core") {
 
 project(":data-kernel:quality-profiler-api") {
     dependencies {
-        api project(":data-kernel:metadata-catalog-api")
         api project(":execution-kernel:execution-core-api")
         api project(":platform-kernel:shared-types-api")
     }
@@ -243,7 +242,6 @@ project(":data-kernel:quality-profiler-api") {
 project(":data-kernel:quality-profiler-core") {
     dependencies {
         api project(":data-kernel:quality-profiler-api")
-        implementation project(":data-kernel:metadata-catalog-api")
         implementation project(":execution-kernel:execution-core-api")
         implementation project(":platform-kernel:shared-types-api")
     }
@@ -596,13 +594,11 @@ def allowedProjectDependencies = [
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":data-kernel:quality-profiler-api": [
-                ":data-kernel:metadata-catalog-api",
                 ":execution-kernel:execution-core-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":data-kernel:quality-profiler-core": [
                 ":data-kernel:quality-profiler-api",
-                ":data-kernel:metadata-catalog-api",
                 ":execution-kernel:execution-core-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
