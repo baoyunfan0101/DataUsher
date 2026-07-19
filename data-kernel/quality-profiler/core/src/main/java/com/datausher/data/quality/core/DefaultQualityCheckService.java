@@ -1,10 +1,13 @@
 package com.datausher.data.quality.core;
 
 import com.datausher.data.quality.api.CancelQualityCheckRequest;
+import com.datausher.data.quality.api.DataAnomalyDetectedEvent;
 import com.datausher.data.quality.api.QualityCheckId;
 import com.datausher.data.quality.api.QualityCheckRun;
 import com.datausher.data.quality.api.QualityCheckService;
 import com.datausher.data.quality.api.QualityCheckState;
+import com.datausher.data.quality.api.QualityCheckStateChangedEvent;
+import com.datausher.data.quality.api.QualityOutcome;
 import com.datausher.data.quality.api.QualityResult;
 import com.datausher.data.quality.api.QualityRule;
 import com.datausher.data.quality.api.QualityRuleQueryService;
@@ -26,6 +29,7 @@ import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
@@ -50,6 +54,7 @@ public final class DefaultQualityCheckService
     private final QualityResultDecoderRegistry decoders;
     private final IdGenerator idGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultQualityCheckService(
             QualityCheckStore store,
@@ -59,7 +64,8 @@ public final class DefaultQualityCheckService
             QualityExecutionPlannerRegistry planners,
             QualityResultDecoderRegistry decoders,
             IdGenerator idGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.rules = Objects.requireNonNull(rules, "rules must not be null");
@@ -70,6 +76,8 @@ public final class DefaultQualityCheckService
         this.decoders = Objects.requireNonNull(decoders, "decoders must not be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(
+                eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -90,6 +98,9 @@ public final class DefaultQualityCheckService
                 || !existing.attributes().equals(request.attributes()))) {
             throw new IllegalStateException(
                     "quality check idempotency key was used for a different request");
+        }
+        if (result.created()) {
+            publishStateChange(Optional.empty(), existing, request.requestContext());
         }
         return existing;
     }
@@ -130,6 +141,8 @@ public final class DefaultQualityCheckService
                 Optional.empty(), clock.now(), Optional.empty());
         try {
             store.update(current, submitted, List.of());
+            publishStateChange(
+                    Optional.of(current.state()), submitted, requestContext);
             return submitted;
         } catch (RevisionConflictException conflict) {
             QualityCheckRun concurrent = requireCheck(checkId);
@@ -169,6 +182,8 @@ public final class DefaultQualityCheckService
                 current, QualityCheckState.CANCELLED, current.executionRequestId(),
                 Optional.empty(), now, Optional.of(now));
         store.update(current, cancelled, List.of());
+        publishStateChange(
+                Optional.of(current.state()), cancelled, request.requestContext());
         return cancelled;
     }
 
@@ -205,6 +220,14 @@ public final class DefaultQualityCheckService
                 current, state, current.executionRequestId(), failureCode, now,
                 state.terminal() ? Optional.of(now) : Optional.empty());
         store.update(current, replacement, results);
+        publishStateChange(
+                Optional.of(current.state()), replacement, event.requestContext());
+        List<QualityResult> failedResults = results.stream()
+                .filter(result -> result.outcome() == QualityOutcome.FAILED).toList();
+        if (!failedResults.isEmpty()) {
+            eventPublisher.publish(new DataAnomalyDetectedEvent(
+                    nextEventId(), now, event.requestContext(), replacement, failedResults));
+        }
     }
 
     private List<QualityResult> decodeAndValidate(
@@ -290,5 +313,19 @@ public final class DefaultQualityCheckService
                 current.idempotencyKey(), state, executionRequestId, failureCode,
                 current.attributes(), current.createdAt(), now, finishedAt,
                 current.revision() + 1);
+    }
+
+    private void publishStateChange(
+            Optional<QualityCheckState> previousState,
+            QualityCheckRun check,
+            RequestContext requestContext
+    ) {
+        eventPublisher.publish(new QualityCheckStateChangedEvent(
+                nextEventId(), check.updatedAt(), requestContext, previousState, check));
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(
+                IdGenerationRequest.of("quality-profiler", "domain-event"));
     }
 }

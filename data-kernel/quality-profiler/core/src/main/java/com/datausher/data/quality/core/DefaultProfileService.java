@@ -6,6 +6,7 @@ import com.datausher.data.quality.api.ProfileJob;
 import com.datausher.data.quality.api.ProfileJobId;
 import com.datausher.data.quality.api.ProfileJobState;
 import com.datausher.data.quality.api.ProfileMetric;
+import com.datausher.data.quality.api.ProfileJobStateChangedEvent;
 import com.datausher.data.quality.api.ProfileQueryService;
 import com.datausher.data.quality.api.StartProfileJobRequest;
 import com.datausher.execution.api.CancelExecutionRequest;
@@ -22,6 +23,7 @@ import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.SubmitExecutionRequest;
 import com.datausher.platform.shared.concurrent.RevisionConflictException;
 import com.datausher.platform.shared.context.RequestContext;
+import com.datausher.platform.shared.event.DomainEventPublisher;
 import com.datausher.platform.shared.id.IdGenerationRequest;
 import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
@@ -44,6 +46,7 @@ public final class DefaultProfileService
     private final ProfileResultDecoderRegistry decoders;
     private final IdGenerator idGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultProfileService(
             ProfileStore store,
@@ -52,7 +55,8 @@ public final class DefaultProfileService
             ProfileExecutionPlannerRegistry planners,
             ProfileResultDecoderRegistry decoders,
             IdGenerator idGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.executions = Objects.requireNonNull(executions, "executions must not be null");
@@ -62,6 +66,8 @@ public final class DefaultProfileService
         this.decoders = Objects.requireNonNull(decoders, "decoders must not be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(
+                eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -83,6 +89,9 @@ public final class DefaultProfileService
                 || !existing.attributes().equals(request.attributes()))) {
             throw new IllegalStateException(
                     "profile idempotency key was used for a different request");
+        }
+        if (result.created()) {
+            publishStateChange(Optional.empty(), existing, request.requestContext());
         }
         return existing;
     }
@@ -119,6 +128,8 @@ public final class DefaultProfileService
                 Optional.empty(), clock.now(), Optional.empty());
         try {
             store.update(current, submitted, List.of());
+            publishStateChange(
+                    Optional.of(current.state()), submitted, requestContext);
             return submitted;
         } catch (RevisionConflictException conflict) {
             ProfileJob concurrent = requireJob(jobId);
@@ -150,6 +161,8 @@ public final class DefaultProfileService
                     current, ProfileJobState.CANCELLED, Optional.empty(), Optional.empty(),
                     clock.now(), Optional.of(clock.now()));
             store.update(current, cancelled, List.of());
+            publishStateChange(
+                    Optional.of(current.state()), cancelled, request.requestContext());
             return cancelled;
         }
         ExecutionRequest execution = executionQueries.findRequest(
@@ -162,6 +175,8 @@ public final class DefaultProfileService
                 current, ProfileJobState.CANCELLED, current.executionRequestId(),
                 Optional.empty(), now, Optional.of(now));
         store.update(current, cancelled, List.of());
+        publishStateChange(
+                Optional.of(current.state()), cancelled, request.requestContext());
         return cancelled;
     }
 
@@ -198,6 +213,8 @@ public final class DefaultProfileService
                 current, state, current.executionRequestId(), failureCode, now,
                 state.terminal() ? Optional.of(now) : Optional.empty());
         store.update(current, replacement, metrics);
+        publishStateChange(
+                Optional.of(current.state()), replacement, event.requestContext());
     }
 
     private List<ProfileMetric> decodeAndValidate(
@@ -252,5 +269,19 @@ public final class DefaultProfileService
                 current.idempotencyKey(), state, executionRequestId, failureCode,
                 current.attributes(), current.createdAt(), now, finishedAt,
                 current.revision() + 1);
+    }
+
+    private void publishStateChange(
+            Optional<ProfileJobState> previousState,
+            ProfileJob job,
+            RequestContext requestContext
+    ) {
+        eventPublisher.publish(new ProfileJobStateChangedEvent(
+                nextEventId(), job.updatedAt(), requestContext, previousState, job));
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(
+                IdGenerationRequest.of("quality-profiler", "domain-event"));
     }
 }

@@ -23,6 +23,10 @@ import com.datausher.data.lineage.api.LineageQueryService;
 import com.datausher.data.lineage.api.LineageTraversalNode;
 import com.datausher.data.lineage.api.LineageTraversalQuery;
 import com.datausher.data.lineage.api.LineageTraversalResult;
+import com.datausher.data.lineage.api.LineageUpdatedEvent;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
 import com.datausher.platform.shared.page.PageResult;
 import com.datausher.platform.shared.time.Clock;
@@ -46,15 +50,22 @@ public final class DefaultLineageService
     private final LineageStore store;
     private final LineageIdFactory idFactory;
     private final Clock clock;
+    private final IdGenerator idGenerator;
+    private final DomainEventPublisher eventPublisher;
 
     public DefaultLineageService(
             LineageStore store,
             LineageIdFactory idFactory,
-            Clock clock
+            Clock clock,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
     ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.idFactory = Objects.requireNonNull(idFactory, "idFactory must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(
+                eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -76,9 +87,14 @@ public final class DefaultLineageService
                         edge -> toEdge(request, edge, nodeIds)));
         boolean changed = store.apply(new LineageMutation(
                 request.source(), request.sourceRevision(), request.mode(), nodes, edges));
-        return new LineageApplyResult(
+        LineageApplyResult result = new LineageApplyResult(
                 request.source(), request.sourceRevision(), nodes.size(), edges.size(),
                 changed, clock.now());
+        if (changed) {
+            eventPublisher.publish(new LineageUpdatedEvent(
+                    nextEventId(), result.appliedAt(), request.requestContext(), result));
+        }
+        return result;
     }
 
     @Override
@@ -208,5 +224,10 @@ public final class DefaultLineageService
     }
 
     private record NodeDepth(LineageNodeId nodeId, int depth) {
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(
+                IdGenerationRequest.of("lineage", "domain-event"));
     }
 }

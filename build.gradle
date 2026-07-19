@@ -229,6 +229,7 @@ project(":data-kernel:lineage-core") {
     dependencies {
         api project(":data-kernel:lineage-api")
         implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:shared-types-core")
     }
 }
 

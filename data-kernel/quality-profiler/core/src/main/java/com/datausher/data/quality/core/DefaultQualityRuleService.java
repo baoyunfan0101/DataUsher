@@ -8,8 +8,14 @@ import com.datausher.data.quality.api.QualityRuleCommandService;
 import com.datausher.data.quality.api.QualityRuleId;
 import com.datausher.data.quality.api.QualityRuleQueryService;
 import com.datausher.data.quality.api.QualityRuleStatus;
+import com.datausher.data.quality.api.QualityRuleCreatedEvent;
+import com.datausher.data.quality.api.QualityRuleStatusChangedEvent;
 import com.datausher.data.quality.api.QualityRuleVersion;
+import com.datausher.data.quality.api.QualityRuleVersionCreatedEvent;
 import com.datausher.platform.shared.concurrent.RevisionConflictException;
+import com.datausher.platform.shared.event.DomainEventPublisher;
+import com.datausher.platform.shared.id.IdGenerationRequest;
+import com.datausher.platform.shared.id.IdGenerator;
 import com.datausher.platform.shared.time.Clock;
 
 import java.time.Instant;
@@ -21,10 +27,20 @@ public final class DefaultQualityRuleService
         implements QualityRuleCommandService, QualityRuleQueryService {
     private final QualityRuleStore store;
     private final Clock clock;
+    private final IdGenerator idGenerator;
+    private final DomainEventPublisher eventPublisher;
 
-    public DefaultQualityRuleService(QualityRuleStore store, Clock clock) {
+    public DefaultQualityRuleService(
+            QualityRuleStore store,
+            Clock clock,
+            IdGenerator idGenerator,
+            DomainEventPublisher eventPublisher
+    ) {
         this.store = Objects.requireNonNull(store, "store must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator must not be null");
+        this.eventPublisher = Objects.requireNonNull(
+                eventPublisher, "eventPublisher must not be null");
     }
 
     @Override
@@ -38,6 +54,8 @@ public final class DefaultQualityRuleService
                 request.ruleId(), 1, request.specification(), now,
                 request.requestContext().actor().actorId());
         store.create(rule, version);
+        eventPublisher.publish(new QualityRuleCreatedEvent(
+                nextEventId(), now, request.requestContext(), rule, version));
         return rule;
     }
 
@@ -58,6 +76,8 @@ public final class DefaultQualityRuleService
                 current.ruleId(), versionNumber, current.status(), current.attributes(),
                 current.createdAt(), now, current.revision() + 1);
         store.addVersion(current, replacement, version);
+        eventPublisher.publish(new QualityRuleVersionCreatedEvent(
+                nextEventId(), now, request.requestContext(), version));
         return version;
     }
 
@@ -73,7 +93,11 @@ public final class DefaultQualityRuleService
             throw new IllegalStateException("archived quality rule status cannot change");
         }
         store.changeStatus(current, request.status(), clock.now());
-        return requireRule(request.ruleId());
+        QualityRule changed = requireRule(request.ruleId());
+        eventPublisher.publish(new QualityRuleStatusChangedEvent(
+                nextEventId(), changed.updatedAt(), request.requestContext(),
+                current.status(), changed));
+        return changed;
     }
 
     @Override
@@ -109,5 +133,10 @@ public final class DefaultQualityRuleService
                     "quality-rule", current.ruleId().value(),
                     expectedRevision, current.revision());
         }
+    }
+
+    private String nextEventId() {
+        return idGenerator.nextIdValue(
+                IdGenerationRequest.of("quality-profiler", "domain-event"));
     }
 }

@@ -109,7 +109,7 @@ class DefaultLineageServiceTest {
                     public java.time.ZoneId zone() {
                         return java.time.ZoneId.of("UTC");
                     }
-                });
+                }, new com.datausher.platform.shared.id.core.UuidIdGenerator(), event -> { });
     }
 
     private static ApplyLineageSnapshotRequest snapshot(

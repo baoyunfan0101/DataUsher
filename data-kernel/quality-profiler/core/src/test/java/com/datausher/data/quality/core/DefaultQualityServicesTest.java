@@ -52,8 +52,10 @@ class DefaultQualityServicesTest {
 
     @Test
     void versionsRulesAndEvaluatesPinnedVersionsThroughExecution() {
+        var events = new java.util.ArrayList<com.datausher.platform.shared.event.DomainEvent>();
         var ruleService = new DefaultQualityRuleService(
-                new InMemoryQualityRuleStore(), new SystemClock());
+                new InMemoryQualityRuleStore(), new SystemClock(),
+                new UuidIdGenerator(), events::add);
         RequestContext context = RequestContext.system("request-1", Instant.now());
         QualityRuleId ruleId = new QualityRuleId("orders-not-null");
         var rule = ruleService.create(new CreateQualityRuleRequest(
@@ -96,7 +98,7 @@ class DefaultQualityServicesTest {
                 new InMemoryQualityCheckStore(), ruleService, executions, executions,
                 new QualityExecutionPlannerRegistry(List.of(planner)),
                 new QualityResultDecoderRegistry(List.of(decoder)),
-                new UuidIdGenerator(), new SystemClock());
+                new UuidIdGenerator(), new SystemClock(), events::add);
         StartQualityCheckRequest request = new StartQualityCheckRequest(
                 List.of(new QualityRuleRef(ruleId, version.version())), policy(),
                 "quality-key", Map.of(), context);
@@ -112,6 +114,15 @@ class DefaultQualityServicesTest {
                 checks.findCheck(first.checkId()).orElseThrow().state());
         assertEquals(QualityOutcome.FAILED,
                 checks.listResults(first.checkId()).getFirst().outcome());
+        assertEquals(List.of(
+                        "quality-profiler.rule-created",
+                        "quality-profiler.rule-version-created",
+                        "quality-profiler.check-state-changed",
+                        "quality-profiler.check-state-changed",
+                        "quality-profiler.check-state-changed",
+                        "quality-profiler.data-anomaly-detected"),
+                events.stream().map(
+                        com.datausher.platform.shared.event.DomainEvent::eventType).toList());
     }
 
     private static QualityRuleSpec ruleSpec(String version) {

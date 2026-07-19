@@ -76,7 +76,7 @@ class DefaultProfileServiceTest {
                 new InMemoryProfileStore(), executions, executions,
                 new ProfileExecutionPlannerRegistry(List.of(planner)),
                 new ProfileResultDecoderRegistry(List.of(decoder)),
-                new UuidIdGenerator(), new SystemClock());
+                new UuidIdGenerator(), new SystemClock(), event -> { });
         RequestContext context = RequestContext.system("request-1", Instant.now());
         StartProfileJobRequest request = new StartProfileJobRequest(
                 new DataTargetRef(DataTargetType.TABLE, "orders", Map.of()),
