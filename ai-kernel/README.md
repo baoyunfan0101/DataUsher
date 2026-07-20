@@ -6,12 +6,12 @@ Stable AI tool, context, guardrail, and runtime contracts.
 | --- | --- | --- |
 | `ai-tool-contracts-api` | Tool schemas, permission requirements, catalog queries, and typed tool results | governance resource API, execution API, shared types |
 | `ai-tool-contracts-core` | Default tool registry orchestration and replaceable storage ports | `ai-tool-contracts-api`, shared types |
-| `ai-context-retrieval-api` | Permission-aware context queries and context assembly contracts | AI tool API, data APIs, execution API, access API, shared types |
-| `ai-context-retrieval-core` | Context provider orchestration and permission filtering | `ai-context-retrieval-api`, data APIs, access API, shared types |
-| `ai-guardrails-api` | Permission reviews, SQL safety reviews, and sensitive data filtering contracts | execution APIs, access/resource APIs, shared types |
-| `ai-guardrails-core` | Default guardrail orchestration and replaceable review ports | `ai-guardrails-api`, access/resource APIs, shared types |
-| `ai-runtime-api` | Conversations, provider calls, auditable tool invocations, and lifecycle events | AI APIs, LLM provider API, shared types |
-| `ai-runtime-core` | Default runtime orchestration and replaceable storage ports | `ai-runtime-api`, AI APIs, LLM provider API, shared types |
+| `ai-context-retrieval-api` | Permission-aware context queries and context assembly contracts | access/resource APIs, shared types |
+| `ai-context-retrieval-core` | Context provider orchestration and permission filtering | `ai-context-retrieval-api`, access/resource APIs, shared types |
+| `ai-guardrails-api` | Permission reviews, SQL safety reviews, and sensitive data filtering contracts | execution API, access/resource APIs, shared types |
+| `ai-guardrails-core` | Default guardrail orchestration and replaceable review ports | `ai-guardrails-api`, access API, shared types |
+| `ai-runtime-api` | Conversations, provider calls, auditable tool invocations, and lifecycle events | AI tool API, execution API, access API, LLM provider API, shared types |
+| `ai-runtime-core` | Default runtime orchestration and replaceable storage ports | `ai-runtime-api`, LLM provider/runtime APIs, shared types |
 
 ## Usage Rules
 

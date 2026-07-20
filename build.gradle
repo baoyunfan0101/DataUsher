@@ -344,18 +344,12 @@ project(":ai-kernel:ai-tool-contracts-api") {
 project(":ai-kernel:ai-tool-contracts-core") {
     dependencies {
         api project(":ai-kernel:ai-tool-contracts-api")
-        implementation project(":execution-kernel:execution-core-api")
         implementation project(":platform-kernel:shared-types-api")
     }
 }
 
 project(":ai-kernel:ai-context-retrieval-api") {
     dependencies {
-        api project(":ai-kernel:ai-tool-contracts-api")
-        api project(":data-kernel:lineage-api")
-        api project(":data-kernel:metadata-catalog-api")
-        api project(":data-kernel:quality-profiler-api")
-        api project(":execution-kernel:execution-core-api")
         api project(":governance-kernel:identity-access-api")
         api project(":governance-kernel:resource-registry-api")
         api project(":platform-kernel:shared-types-api")
@@ -365,10 +359,6 @@ project(":ai-kernel:ai-context-retrieval-api") {
 project(":ai-kernel:ai-context-retrieval-core") {
     dependencies {
         api project(":ai-kernel:ai-context-retrieval-api")
-        implementation project(":data-kernel:lineage-api")
-        implementation project(":data-kernel:metadata-catalog-api")
-        implementation project(":data-kernel:quality-profiler-api")
-        implementation project(":execution-kernel:execution-core-api")
         implementation project(":governance-kernel:identity-access-api")
         implementation project(":governance-kernel:resource-registry-api")
         implementation project(":platform-kernel:shared-types-api")
@@ -378,7 +368,6 @@ project(":ai-kernel:ai-context-retrieval-core") {
 project(":ai-kernel:ai-guardrails-api") {
     dependencies {
         api project(":execution-kernel:execution-core-api")
-        api project(":execution-kernel:execution-sql-api")
         api project(":governance-kernel:identity-access-api")
         api project(":governance-kernel:resource-registry-api")
         api project(":platform-kernel:shared-types-api")
@@ -388,22 +377,16 @@ project(":ai-kernel:ai-guardrails-api") {
 project(":ai-kernel:ai-guardrails-core") {
     dependencies {
         api project(":ai-kernel:ai-guardrails-api")
-        implementation project(":execution-kernel:execution-core-api")
-        implementation project(":execution-kernel:execution-sql-api")
         implementation project(":governance-kernel:identity-access-api")
-        implementation project(":governance-kernel:resource-registry-api")
         implementation project(":platform-kernel:shared-types-api")
     }
 }
 
 project(":ai-kernel:ai-runtime-api") {
     dependencies {
-        api project(":ai-kernel:ai-context-retrieval-api")
-        api project(":ai-kernel:ai-guardrails-api")
         api project(":ai-kernel:ai-tool-contracts-api")
         api project(":execution-kernel:execution-core-api")
         api project(":governance-kernel:identity-access-api")
-        api project(":integration-kernel:integration-runtime-api")
         api project(":integration-kernel:llm-provider-adapters-api")
         api project(":platform-kernel:shared-types-api")
     }
@@ -412,11 +395,6 @@ project(":ai-kernel:ai-runtime-api") {
 project(":ai-kernel:ai-runtime-core") {
     dependencies {
         api project(":ai-kernel:ai-runtime-api")
-        implementation project(":ai-kernel:ai-context-retrieval-api")
-        implementation project(":ai-kernel:ai-guardrails-api")
-        implementation project(":ai-kernel:ai-tool-contracts-api")
-        implementation project(":execution-kernel:execution-core-api")
-        implementation project(":governance-kernel:identity-access-api")
         implementation project(":integration-kernel:integration-runtime-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
         implementation project(":platform-kernel:shared-types-api")
@@ -775,61 +753,39 @@ def allowedProjectDependencies = [
         ] as Set,
         ":ai-kernel:ai-tool-contracts-core": [
                 ":ai-kernel:ai-tool-contracts-api",
-                ":execution-kernel:execution-core-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-context-retrieval-api": [
-                ":ai-kernel:ai-tool-contracts-api",
-                ":data-kernel:lineage-api",
-                ":data-kernel:metadata-catalog-api",
-                ":data-kernel:quality-profiler-api",
-                ":execution-kernel:execution-core-api",
                 ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-context-retrieval-core": [
                 ":ai-kernel:ai-context-retrieval-api",
-                ":data-kernel:lineage-api",
-                ":data-kernel:metadata-catalog-api",
-                ":data-kernel:quality-profiler-api",
-                ":execution-kernel:execution-core-api",
                 ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-guardrails-api": [
                 ":execution-kernel:execution-core-api",
-                ":execution-kernel:execution-sql-api",
                 ":governance-kernel:identity-access-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-guardrails-core": [
                 ":ai-kernel:ai-guardrails-api",
-                ":execution-kernel:execution-core-api",
-                ":execution-kernel:execution-sql-api",
                 ":governance-kernel:identity-access-api",
-                ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-runtime-api": [
-                ":ai-kernel:ai-context-retrieval-api",
-                ":ai-kernel:ai-guardrails-api",
                 ":ai-kernel:ai-tool-contracts-api",
                 ":execution-kernel:execution-core-api",
                 ":governance-kernel:identity-access-api",
-                ":integration-kernel:integration-runtime-api",
                 ":integration-kernel:llm-provider-adapters-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-runtime-core": [
                 ":ai-kernel:ai-runtime-api",
-                ":ai-kernel:ai-context-retrieval-api",
-                ":ai-kernel:ai-guardrails-api",
-                ":ai-kernel:ai-tool-contracts-api",
-                ":execution-kernel:execution-core-api",
-                ":governance-kernel:identity-access-api",
                 ":integration-kernel:integration-runtime-api",
                 ":integration-kernel:llm-provider-adapters-api",
                 ":platform-kernel:shared-types-api"
