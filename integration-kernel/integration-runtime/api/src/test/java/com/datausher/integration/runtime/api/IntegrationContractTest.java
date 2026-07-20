@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,5 +72,43 @@ class IntegrationContractTest {
                 1,
                 Map.of()
         ));
+    }
+
+    @Test
+    void redactsResolvedCredentialSecretsFromToString() {
+        CredentialBinding binding = new CredentialBinding(
+                "analytics", "mysql", URI.create("vault://data/mysql"), 1, Map.of());
+        ResolvedCredential credential = ResolvedCredential.of(
+                binding,
+                Map.of("password", new SecretString("super-secret")),
+                Map.of("host", "warehouse"));
+
+        assertTrue(credential.toString().contains("[secret]"));
+        assertTrue(!credential.toString().contains("super-secret"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> credential.secrets().put("token", new SecretString("value")));
+    }
+
+    @Test
+    void redactsSensitiveValuesFromMessagesAndDetails() {
+        SensitiveValueRedactor redactor = SensitiveValueRedactor.of(Set.of(
+                "secret-token", "secret"));
+
+        assertTrue(!redactor.redact("token=secret-token").contains("secret-token"));
+        assertTrue(!redactor.redact(Map.of("detail", "password=secret"))
+                .get("detail")
+                .contains("secret"));
+        assertThrows(IllegalArgumentException.class,
+                () -> SensitiveValueRedactor.of(Set.of("")));
+    }
+
+    @Test
+    void namesAdapterOperationsWithCapabilitiesAndMutationSemantics() {
+        AdapterOperation operation = AdapterOperation.of(
+                "compute.job.submit", "compute.job.execute", true);
+
+        assertEquals("compute.job.submit", operation.name());
+        assertEquals("compute.job.execute", operation.capabilityName());
+        assertTrue(operation.mutating());
     }
 }

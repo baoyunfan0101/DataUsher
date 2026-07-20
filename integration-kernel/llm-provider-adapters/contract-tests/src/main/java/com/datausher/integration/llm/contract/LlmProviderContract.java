@@ -6,12 +6,12 @@ import com.datausher.integration.llm.api.LlmCapabilities;
 import com.datausher.integration.llm.api.LlmProviderAdapter;
 import com.datausher.integration.runtime.api.AdapterRequestContext;
 import com.datausher.integration.runtime.api.AdapterType;
+import com.datausher.integration.runtime.api.SensitiveValueRedactor;
 
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,11 +51,10 @@ public final class LlmProviderContract {
             Set<String> sensitiveValues
     ) {
         Set<String> checkedValues = sensitiveValues == null ? Set.of() : Set.copyOf(sensitiveValues);
-        for (String value : checkedValues) {
-            assertFalse(content.contains(value),
-                    "chat content must not expose sensitive values");
-            assertTrue(attributes.values().stream().noneMatch(entry -> entry.contains(value)),
-                    "chat attributes must not expose sensitive values");
-        }
+        SensitiveValueRedactor redactor = SensitiveValueRedactor.of(checkedValues);
+        assertEquals(content, redactor.redact(content),
+                "chat content must not expose sensitive values");
+        assertEquals(attributes, redactor.redact(attributes),
+                "chat attributes must not expose sensitive values");
     }
 }

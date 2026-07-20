@@ -5,6 +5,7 @@ import java.util.Objects;
 
 public record WorkflowTaskType(String value) {
     public static final WorkflowTaskType EXECUTION = new WorkflowTaskType("execution");
+    public static final WorkflowTaskType ADAPTER = new WorkflowTaskType("adapter");
 
     public WorkflowTaskType {
         value = Objects.requireNonNull(value, "value must not be null")

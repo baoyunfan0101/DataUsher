@@ -4,6 +4,7 @@ import com.datausher.integration.runtime.api.AdapterDescriptor;
 import com.datausher.integration.runtime.api.AdapterHealth;
 import com.datausher.integration.runtime.api.ExternalSystemException;
 import com.datausher.integration.runtime.api.IntegrationAdapter;
+import com.datausher.integration.runtime.api.SensitiveValueRedactor;
 
 import java.util.Map;
 import java.util.Objects;
@@ -62,13 +63,11 @@ public final class IntegrationAdapterContract {
             Map<String, String> details,
             Set<String> sensitiveValues
     ) {
-        for (String sensitiveValue : sensitiveValues) {
-            assertFalse(message.contains(sensitiveValue),
-                    "message must not expose a sensitive value");
-            assertTrue(details.values().stream()
-                            .noneMatch(value -> value.contains(sensitiveValue)),
-                    "details must not expose a sensitive value");
-        }
+        SensitiveValueRedactor redactor = SensitiveValueRedactor.of(sensitiveValues);
+        assertEquals(message, redactor.redact(message),
+                "message must not expose a sensitive value");
+        assertEquals(details, redactor.redact(details),
+                "details must not expose sensitive values");
     }
 
     private static Set<String> immutableSensitiveValues(Set<String> sensitiveValues) {

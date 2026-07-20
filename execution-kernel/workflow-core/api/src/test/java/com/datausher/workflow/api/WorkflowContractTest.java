@@ -6,6 +6,8 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
+import com.datausher.integration.runtime.api.AdapterOperation;
+import com.datausher.integration.runtime.api.IntegrationValue;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -53,6 +55,25 @@ class WorkflowContractTest {
     void requiresSchedulerBindingsOnlyForSchedulerManagedRuntimes() {
         assertThrows(IllegalArgumentException.class, () -> new WorkflowRuntimeBinding(
                 WorkflowRuntimeType.SCHEDULER_MANAGED, Optional.empty(), Optional.empty(), Map.of()));
+    }
+
+    @Test
+    void definesAdapterTasksWithoutBindingToVendorApis() {
+        AdapterWorkflowTaskAction action = new AdapterWorkflowTaskAction(
+                "superset",
+                "dashboard-prod",
+                AdapterOperation.of("visualization.dataset.bind", "visualization.dataset.bind", true),
+                Map.of("datasetKey", new IntegrationValue.TextValue("daily-sales")),
+                "daily-sales-dataset");
+        WorkflowTaskDefinition task = new WorkflowTaskDefinition(
+                "publish-dataset", "Publish dataset", action,
+                TaskRetryPolicy.NONE, Duration.ofMinutes(10), Map.of());
+
+        assertEquals(WorkflowTaskType.ADAPTER, task.action().taskType());
+        assertEquals("superset", action.adapterId());
+        assertEquals("visualization.dataset.bind", action.operation().capabilityName());
+        assertThrows(UnsupportedOperationException.class,
+                () -> action.parameters().put("extra", new IntegrationValue.TextValue("value")));
     }
 
     private static WorkflowSchedule schedule(String id, String expression) {

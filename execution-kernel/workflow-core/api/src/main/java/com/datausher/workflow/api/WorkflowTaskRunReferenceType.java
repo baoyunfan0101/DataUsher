@@ -6,6 +6,8 @@ import java.util.Objects;
 public record WorkflowTaskRunReferenceType(String value) {
     public static final WorkflowTaskRunReferenceType EXECUTION =
             new WorkflowTaskRunReferenceType("execution");
+    public static final WorkflowTaskRunReferenceType ADAPTER =
+            new WorkflowTaskRunReferenceType("adapter");
 
     public WorkflowTaskRunReferenceType {
         value = Objects.requireNonNull(value, "value must not be null")

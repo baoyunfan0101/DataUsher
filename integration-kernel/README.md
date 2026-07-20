@@ -12,9 +12,13 @@
 - Publish scheduler workflows with portable task, dependency, and schedule contracts.
 - Preserve trigger idempotency keys in scheduler run handles.
 - Observe scheduler task runs through the paged task-run contract.
+- Publish visualization dataset, chart, and dashboard bindings through `VisualizationAdapter`.
 - Concrete adapters must propagate interruption to vendor calls when cancellation is supported.
 - Declare supported operations with the module capability constants and register adapters through `AdapterRegistry`.
+- Use module `*Operations` constants when routing calls through `AdapterInvocationExecutor`.
 - Pass only `IntegrationValue` across dynamic data boundaries.
 - Store only opaque secret-manager URIs in `CredentialBinding`; never put secret material in options or attributes.
+- Resolve secret material through `CredentialResolver` inside adapter implementations only.
+- Redact vendor messages and details with `SensitiveValueRedactor` before exposing them.
 - Map external failures with `IntegrationErrorMapper` before returning them to business modules.
 - Run the applicable `adapter-contract-tests` checks for every concrete adapter.

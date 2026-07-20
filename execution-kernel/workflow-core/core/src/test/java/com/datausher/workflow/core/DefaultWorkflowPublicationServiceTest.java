@@ -6,6 +6,8 @@ import com.datausher.execution.api.ExecutionResultMode;
 import com.datausher.execution.api.ExecutionSpecification;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
+import com.datausher.integration.runtime.api.AdapterOperation;
+import com.datausher.integration.runtime.api.IntegrationValue;
 import com.datausher.integration.runtime.api.AdapterCapability;
 import com.datausher.integration.runtime.api.AdapterDescriptor;
 import com.datausher.integration.runtime.api.AdapterHealth;
@@ -30,6 +32,7 @@ import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.time.core.SystemClock;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.workflow.api.PublishWorkflowRequest;
+import com.datausher.workflow.api.AdapterWorkflowTaskAction;
 import com.datausher.workflow.api.TaskRetryPolicy;
 import com.datausher.workflow.api.WorkflowId;
 import com.datausher.workflow.api.WorkflowQueryService;
@@ -122,6 +125,45 @@ class DefaultWorkflowPublicationServiceTest {
                 RequestContext.system("request-custom", Instant.now())));
 
         assertEquals("custom", scheduler.lastDefinition.tasks().getFirst().taskType().value());
+    }
+
+    @Test
+    void mapsAdapterTasksToPortableSchedulerDefinitions() {
+        WorkflowId workflowId = new WorkflowId("adapter-workflow");
+        AdapterOperation operation = AdapterOperation.of(
+                "visualization.dataset.bind", "visualization.dataset.bind", true);
+        WorkflowTaskDefinition adapterTask = new WorkflowTaskDefinition(
+                "publish-dataset",
+                "Publish dataset",
+                new AdapterWorkflowTaskAction(
+                        "superset", "dashboard-prod", operation,
+                        Map.of("datasetKey", new IntegrationValue.TextValue("daily-sales")),
+                        "daily-sales-dataset"),
+                TaskRetryPolicy.NONE, Duration.ofMinutes(10), Map.of());
+        WorkflowVersion version = new WorkflowVersion(
+                workflowId, 1, new WorkflowVersionSpec(
+                        List.of(adapterTask), List.of(), List.of(),
+                        WorkflowRuntimeBinding.schedulerManaged(
+                                "scheduler", "binding", Map.of()), Map.of()),
+                Instant.EPOCH, "system");
+        var registry = new InMemoryAdapterRegistry();
+        var scheduler = new RecordingScheduler();
+        registry.register(scheduler);
+        var service = new DefaultWorkflowPublicationService(
+                versions(version), new InMemoryWorkflowPublicationStore(), registry,
+                new DirectInvocationExecutor(), new SystemClock(), Duration.ofSeconds(30),
+                new UuidIdGenerator(), event -> { });
+
+        service.publish(new PublishWorkflowRequest(
+                workflowId, 1, "scheduler", "binding", "publish-adapter",
+                RequestContext.system("request-adapter", Instant.now())));
+
+        SchedulerTaskDefinition mapped = scheduler.lastDefinition.tasks().getFirst();
+        assertEquals(SchedulerTaskType.PLATFORM_ADAPTER, mapped.taskType());
+        assertEquals("superset", mapped.options().get("adapterId"));
+        assertEquals("dashboard-prod", mapped.options().get("bindingId"));
+        assertEquals("visualization.dataset.bind", mapped.options().get("operation"));
+        assertEquals("daily-sales-dataset", mapped.options().get("idempotencyKey"));
     }
 
     private static WorkflowTaskDefinition task(String key) {

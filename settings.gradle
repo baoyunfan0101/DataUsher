@@ -42,6 +42,7 @@ include(
     "integration-kernel:datasource-adapters-api",
     "integration-kernel:compute-engine-adapters-api",
     "integration-kernel:scheduler-adapters-api",
+    "integration-kernel:visualization-adapters-api",
     "integration-kernel:llm-provider-adapters-api",
     "integration-kernel:adapter-contract-tests",
     "data-kernel:datasource-connectivity-api",
@@ -128,6 +129,8 @@ project(":integration-kernel:compute-engine-adapters-api").projectDir =
         file("integration-kernel/compute-engine-adapters/api")
 project(":integration-kernel:scheduler-adapters-api").projectDir =
         file("integration-kernel/scheduler-adapters/api")
+project(":integration-kernel:visualization-adapters-api").projectDir =
+        file("integration-kernel/visualization-adapters/api")
 project(":integration-kernel:llm-provider-adapters-api").projectDir =
         file("integration-kernel/llm-provider-adapters/api")
 project(":integration-kernel:adapter-contract-tests").projectDir =
