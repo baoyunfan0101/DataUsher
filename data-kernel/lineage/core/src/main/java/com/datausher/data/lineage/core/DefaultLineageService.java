@@ -178,14 +178,15 @@ public final class DefaultLineageService
         Objects.requireNonNull(request, "request must not be null");
         LineageTraversalResult traversal = traverse(new LineageTraversalQuery(
                 request.changedNodeId(), LineageDirection.DOWNSTREAM,
-                request.maxDepth(), request.maxNodes(), request.edgeTypes(),
-                request.impactedNodeTypes()));
+                request.maxDepth(), request.maxNodes(), request.edgeTypes(), Set.of()));
         Map<LineageNodeId, Set<LineageEdgeType>> evidence = new HashMap<>();
         traversal.edges().forEach(edge -> evidence
                 .computeIfAbsent(edge.downstreamNodeId(), ignored -> new HashSet<>())
                 .add(edge.type()));
         List<ImpactCandidate> candidates = traversal.nodes().stream()
                 .filter(node -> node.depth() > 0)
+                .filter(node -> request.impactedNodeTypes().isEmpty()
+                        || request.impactedNodeTypes().contains(node.node().reference().type()))
                 .map(node -> new ImpactCandidate(
                         node.node(), node.depth(),
                         evidence.getOrDefault(node.node().nodeId(), Set.of())))

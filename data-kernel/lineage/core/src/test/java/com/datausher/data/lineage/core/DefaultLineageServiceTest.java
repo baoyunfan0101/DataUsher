@@ -96,6 +96,30 @@ class DefaultLineageServiceTest {
         assertEquals(2L, impact.countsByType().get(LineageNodeType.TABLE));
     }
 
+    @Test
+    void impactAnalysisTraversesThroughNonImpactedNodeTypes() {
+        var service = service();
+        service.applySnapshot(snapshot(
+                source("execution-1"), 1, LineageSnapshotMode.REPLACE,
+                List.of(
+                        node("raw", LineageNodeType.TABLE),
+                        node("refresh-task", LineageNodeType.TASK),
+                        node("dashboard", LineageNodeType.DASHBOARD)),
+                List.of(
+                        edge("raw", LineageNodeType.TABLE,
+                                "refresh-task", LineageNodeType.TASK),
+                        edge("refresh-task", LineageNodeType.TASK,
+                                "dashboard", LineageNodeType.DASHBOARD))));
+        var raw = service.findNode(ref("raw", LineageNodeType.TABLE)).orElseThrow();
+
+        var impact = service.analyzeImpact(new ImpactAnalysisRequest(
+                raw.nodeId(), 10, 100, Set.of(), Set.of(LineageNodeType.DASHBOARD)));
+
+        assertEquals(List.of("dashboard"), impact.candidates().stream()
+                .map(candidate -> candidate.node().displayName()).toList());
+        assertEquals(1L, impact.countsByType().get(LineageNodeType.DASHBOARD));
+    }
+
     private static DefaultLineageService service() {
         return new DefaultLineageService(
                 new InMemoryLineageStore(), new Sha256LineageIdFactory(),
@@ -132,15 +156,33 @@ class DefaultLineageServiceTest {
     }
 
     private static LineageNodeInput node(String id) {
-        return new LineageNodeInput(ref(id), id, Map.of("domain", "sales"));
+        return node(id, LineageNodeType.TABLE);
+    }
+
+    private static LineageNodeInput node(String id, LineageNodeType type) {
+        return new LineageNodeInput(ref(id, type), id, Map.of("domain", "sales"));
     }
 
     private static LineageNodeRef ref(String id) {
-        return new LineageNodeRef(LineageNodeType.TABLE, id);
+        return ref(id, LineageNodeType.TABLE);
+    }
+
+    private static LineageNodeRef ref(String id, LineageNodeType type) {
+        return new LineageNodeRef(type, id);
     }
 
     private static LineageEdgeInput edge(String upstream, String downstream) {
+        return edge(upstream, LineageNodeType.TABLE, downstream, LineageNodeType.TABLE);
+    }
+
+    private static LineageEdgeInput edge(
+            String upstream,
+            LineageNodeType upstreamType,
+            String downstream,
+            LineageNodeType downstreamType
+    ) {
         return new LineageEdgeInput(
-                ref(upstream), ref(downstream), LineageEdgeType.DATA_FLOW, Map.of());
+                ref(upstream, upstreamType), ref(downstream, downstreamType),
+                LineageEdgeType.DATA_FLOW, Map.of());
     }
 }
