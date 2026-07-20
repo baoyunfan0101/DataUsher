@@ -498,6 +498,7 @@ project(":datausher-app") {
         implementation project(":integration-kernel:visualization-adapters-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
         implementation project(":data-kernel:datasource-connectivity-core")
+        implementation project(":adapters:datasource-mysql")
         implementation project(":adapters:datasource-hive")
         implementation project(":adapters:datasource-clickhouse")
         implementation project(":data-kernel:metadata-catalog-core")
@@ -889,6 +890,7 @@ def allowedProjectDependencies = [
                 ":integration-kernel:visualization-adapters-api",
                 ":integration-kernel:llm-provider-adapters-api",
                 ":data-kernel:datasource-connectivity-core",
+                ":adapters:datasource-mysql",
                 ":adapters:datasource-hive",
                 ":adapters:datasource-clickhouse",
                 ":data-kernel:metadata-catalog-core",
@@ -904,6 +906,7 @@ def allowedProjectDependencies = [
                 ":ai-kernel:ai-runtime-core",
                 ":adapters:compute-local-sql",
                 ":adapters:compute-spark-sql",
+                ":adapters:datasource-mysql",
                 ":adapters:datasource-hive",
                 ":adapters:datasource-clickhouse"
         ] as Set
