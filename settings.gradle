@@ -72,6 +72,7 @@ include(
     "integration-kernel:llm-provider-adapters-contract-tests",
     "adapters:datasource-mysql",
     "adapters:compute-local-sql",
+    "adapters:compute-spark-sql",
     "datausher-app"
 )
 
@@ -189,3 +190,5 @@ project(":adapters:datasource-mysql").projectDir =
         file("adapters/datasource-mysql")
 project(":adapters:compute-local-sql").projectDir =
         file("adapters/compute-local-sql")
+project(":adapters:compute-spark-sql").projectDir =
+        file("adapters/compute-spark-sql")
