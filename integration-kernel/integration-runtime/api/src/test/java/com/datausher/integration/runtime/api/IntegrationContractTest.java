@@ -72,4 +72,19 @@ class IntegrationContractTest {
                 Map.of()
         ));
     }
+
+    @Test
+    void redactsResolvedCredentialSecretsFromToString() {
+        CredentialBinding binding = new CredentialBinding(
+                "analytics", "mysql", URI.create("vault://data/mysql"), 1, Map.of());
+        ResolvedCredential credential = ResolvedCredential.of(
+                binding,
+                Map.of("password", new SecretString("super-secret")),
+                Map.of("host", "warehouse"));
+
+        assertTrue(credential.toString().contains("[secret]"));
+        assertTrue(!credential.toString().contains("super-secret"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> credential.secrets().put("token", new SecretString("value")));
+    }
 }
