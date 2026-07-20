@@ -184,6 +184,7 @@ project(":integration-kernel:adapter-contract-tests") {
         api project(":integration-kernel:datasource-adapters-api")
         api project(":integration-kernel:compute-engine-adapters-api")
         api project(":integration-kernel:scheduler-adapters-api")
+        api project(":integration-kernel:visualization-adapters-api")
         api project(":integration-kernel:llm-provider-adapters-api")
     }
 }
@@ -430,6 +431,7 @@ configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
         project(":integration-kernel:scheduler-adapters-api"),
+        project(":integration-kernel:visualization-adapters-api"),
         project(":integration-kernel:llm-provider-adapters-api")
 ]) {
     dependencies {
@@ -456,6 +458,7 @@ project(":datausher-app") {
         implementation project(":integration-kernel:datasource-adapters-api")
         implementation project(":integration-kernel:compute-engine-adapters-api")
         implementation project(":integration-kernel:scheduler-adapters-api")
+        implementation project(":integration-kernel:visualization-adapters-api")
         implementation project(":integration-kernel:llm-provider-adapters-api")
         implementation project(":data-kernel:datasource-connectivity-core")
         implementation project(":data-kernel:metadata-catalog-core")
@@ -507,6 +510,7 @@ configure([
         project(":integration-kernel:datasource-adapters-api"),
         project(":integration-kernel:compute-engine-adapters-api"),
         project(":integration-kernel:scheduler-adapters-api"),
+        project(":integration-kernel:visualization-adapters-api"),
         project(":integration-kernel:llm-provider-adapters-api"),
         project(":integration-kernel:adapter-contract-tests"),
         project(":data-kernel:datasource-connectivity-api"),
@@ -650,6 +654,9 @@ def allowedProjectDependencies = [
         ":integration-kernel:scheduler-adapters-api": [
                 ":integration-kernel:integration-runtime-api"
         ] as Set,
+        ":integration-kernel:visualization-adapters-api": [
+                ":integration-kernel:integration-runtime-api"
+        ] as Set,
         ":integration-kernel:llm-provider-adapters-api": [
                 ":integration-kernel:integration-runtime-api"
         ] as Set,
@@ -658,6 +665,7 @@ def allowedProjectDependencies = [
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",
                 ":integration-kernel:scheduler-adapters-api",
+                ":integration-kernel:visualization-adapters-api",
                 ":integration-kernel:llm-provider-adapters-api"
         ] as Set,
         ":data-kernel:datasource-connectivity-api": [
@@ -817,6 +825,7 @@ def allowedProjectDependencies = [
                 ":integration-kernel:datasource-adapters-api",
                 ":integration-kernel:compute-engine-adapters-api",
                 ":integration-kernel:scheduler-adapters-api",
+                ":integration-kernel:visualization-adapters-api",
                 ":integration-kernel:llm-provider-adapters-api",
                 ":data-kernel:datasource-connectivity-core",
                 ":data-kernel:metadata-catalog-core",

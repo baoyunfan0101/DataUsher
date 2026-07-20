@@ -12,6 +12,7 @@
 - Publish scheduler workflows with portable task, dependency, and schedule contracts.
 - Preserve trigger idempotency keys in scheduler run handles.
 - Observe scheduler task runs through the paged task-run contract.
+- Publish visualization dataset, chart, and dashboard bindings through `VisualizationAdapter`.
 - Concrete adapters must propagate interruption to vendor calls when cancellation is supported.
 - Declare supported operations with the module capability constants and register adapters through `AdapterRegistry`.
 - Pass only `IntegrationValue` across dynamic data boundaries.
