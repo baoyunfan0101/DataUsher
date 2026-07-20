@@ -80,7 +80,8 @@ public final class DefaultWorkflowPublicationService implements WorkflowPublicat
     ) {
         this(workflows, store, adapters, invocationExecutor,
                 new SchedulerTaskDefinitionMapperRegistry(List.of(
-                        new ExecutionSchedulerTaskDefinitionMapper())),
+                        new ExecutionSchedulerTaskDefinitionMapper(),
+                        new AdapterSchedulerTaskDefinitionMapper())),
                 clock, adapterTimeout, idGenerator, eventPublisher);
     }
 

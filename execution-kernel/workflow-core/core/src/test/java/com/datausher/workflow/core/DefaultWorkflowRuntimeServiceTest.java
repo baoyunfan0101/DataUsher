@@ -18,6 +18,8 @@ import com.datausher.execution.api.ExecutionStateChangedEvent;
 import com.datausher.execution.api.ExecutionWorkload;
 import com.datausher.execution.api.ExecutionWorkloadType;
 import com.datausher.execution.api.SubmitExecutionRequest;
+import com.datausher.integration.runtime.api.AdapterOperation;
+import com.datausher.integration.runtime.api.IntegrationValue;
 import com.datausher.platform.shared.context.RequestContext;
 import com.datausher.platform.shared.id.core.UuidIdGenerator;
 import com.datausher.platform.shared.page.PageRequest;
@@ -25,6 +27,7 @@ import com.datausher.platform.shared.page.PageResult;
 import com.datausher.platform.shared.time.core.SystemClock;
 import com.datausher.workflow.api.TaskDependency;
 import com.datausher.workflow.api.TaskDependencyCondition;
+import com.datausher.workflow.api.AdapterWorkflowTaskAction;
 import com.datausher.workflow.api.ReportWorkflowTaskRunRequest;
 import com.datausher.workflow.api.TaskInstanceState;
 import com.datausher.workflow.api.TaskRetryPolicy;
@@ -142,6 +145,46 @@ class DefaultWorkflowRuntimeServiceTest {
 
         assertEquals(WorkflowInstanceState.SUCCEEDED,
                 service.findInstance(instance.instanceId()).orElseThrow().state());
+    }
+
+    @Test
+    void routesAdapterTasksThroughRegisteredHandlers() {
+        WorkflowId workflowId = new WorkflowId("adapter-workflow");
+        AdapterOperation operation = AdapterOperation.of(
+                "visualization.dataset.bind", "visualization.dataset.bind", true);
+        WorkflowTaskDefinition adapterTask = new WorkflowTaskDefinition(
+                "publish-dataset",
+                "Publish dataset",
+                new AdapterWorkflowTaskAction(
+                        "superset", "dashboard-prod", operation,
+                        Map.of("datasetKey", new IntegrationValue.TextValue("daily-sales")),
+                        "daily-sales-dataset"),
+                TaskRetryPolicy.NONE,
+                Duration.ofMinutes(1),
+                Map.of());
+        WorkflowVersion version = new WorkflowVersion(
+                workflowId, 1, new WorkflowVersionSpec(
+                        List.of(adapterTask), List.of(), Optional.empty(), Map.of()),
+                Instant.EPOCH, "system");
+        RecordingAdapterHandler handler = new RecordingAdapterHandler(operation);
+        var service = new DefaultWorkflowRuntimeService(
+                versions(version), new InMemoryWorkflowRuntimeStore(),
+                new WorkflowTaskExecutorRegistry(List.of(new AdapterWorkflowTaskExecutor(
+                        new AdapterWorkflowTaskHandlerRegistry(List.of(handler))))),
+                TaskDependencyConditionRegistry.standard(), TaskRetryStrategyRegistry.standard(),
+                new UuidIdGenerator(), new SystemClock(), event -> { });
+        RequestContext context = RequestContext.system("request-adapter", Instant.now());
+
+        var instance = service.trigger(new TriggerWorkflowRequest(
+                workflowId, 1, "adapter-run", Map.of(), context));
+        service.dispatchReady(instance.instanceId(), context);
+
+        var dispatched = service.listTaskInstances(instance.instanceId()).getFirst();
+        assertEquals(1, handler.dispatched);
+        assertEquals(WorkflowTaskRunReferenceType.ADAPTER,
+                dispatched.runReference().orElseThrow().type());
+        assertEquals("superset:dashboard-prod:daily-sales-dataset",
+                dispatched.runReference().orElseThrow().referenceId());
     }
 
     @Test
@@ -371,6 +414,32 @@ class DefaultWorkflowRuntimeServiceTest {
                 return List.of(version);
             }
         };
+    }
+
+    private static final class RecordingAdapterHandler implements AdapterWorkflowTaskHandler {
+        private final AdapterOperation operation;
+        private int dispatched;
+
+        private RecordingAdapterHandler(AdapterOperation operation) {
+            this.operation = operation;
+        }
+
+        @Override
+        public AdapterOperation operation() {
+            return operation;
+        }
+
+        @Override
+        public WorkflowTaskRunReference dispatch(
+                WorkflowTaskDispatchRequest request,
+                AdapterWorkflowTaskAction action
+        ) {
+            dispatched++;
+            return new WorkflowTaskRunReference(
+                    WorkflowTaskRunReferenceType.ADAPTER,
+                    action.adapterId() + ":" + action.bindingId() + ":" + action.idempotencyKey(),
+                    Map.of("operation", action.operation().name()));
+        }
     }
 
     private static final class RecordingExecutions

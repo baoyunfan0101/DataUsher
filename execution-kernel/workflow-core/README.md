@@ -10,6 +10,7 @@ provides default lifecycle services and replaceable stores.
 - Construct `workflow-core-core` only in an application composition root.
 - Register the workflow `ResourceRef` before creating the workflow definition.
 - Model task behavior with `WorkflowTaskAction`; use `ExecutionWorkflowTaskAction` for execution-core work.
+- Use `AdapterWorkflowTaskAction` for adapter operations that must participate in workflow scheduling.
 - Create a new immutable workflow version for every task, dependency, schedule, or policy change.
 - Give each schedule a stable ID and status; a workflow version may contain multiple schedules.
 - Select platform-managed or scheduler-managed runtime ownership explicitly on each version.
