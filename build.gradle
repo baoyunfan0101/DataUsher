@@ -219,6 +219,36 @@ project(":data-kernel:metadata-catalog-core") {
     }
 }
 
+project(":data-kernel:lineage-api") {
+    dependencies {
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":data-kernel:lineage-core") {
+    dependencies {
+        api project(":data-kernel:lineage-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:shared-types-core")
+    }
+}
+
+project(":data-kernel:quality-profiler-api") {
+    dependencies {
+        api project(":execution-kernel:execution-core-api")
+        api project(":platform-kernel:shared-types-api")
+    }
+}
+
+project(":data-kernel:quality-profiler-core") {
+    dependencies {
+        api project(":data-kernel:quality-profiler-api")
+        implementation project(":execution-kernel:execution-core-api")
+        implementation project(":platform-kernel:shared-types-api")
+        testImplementation project(":platform-kernel:shared-types-core")
+    }
+}
+
 project(":execution-kernel:execution-core-api") {
     dependencies {
         api project(":platform-kernel:shared-types-api")
@@ -353,6 +383,8 @@ project(":datausher-app") {
         implementation project(":integration-kernel:llm-provider-adapters-api")
         implementation project(":data-kernel:datasource-connectivity-core")
         implementation project(":data-kernel:metadata-catalog-core")
+        implementation project(":data-kernel:lineage-core")
+        implementation project(":data-kernel:quality-profiler-core")
         implementation project(":execution-kernel:execution-core-core")
         implementation project(":execution-kernel:execution-sql-core")
         implementation project(":execution-kernel:workflow-core-core")
@@ -400,6 +432,10 @@ configure([
         project(":data-kernel:datasource-connectivity-core"),
         project(":data-kernel:metadata-catalog-api"),
         project(":data-kernel:metadata-catalog-core"),
+        project(":data-kernel:lineage-api"),
+        project(":data-kernel:lineage-core"),
+        project(":data-kernel:quality-profiler-api"),
+        project(":data-kernel:quality-profiler-core"),
         project(":execution-kernel:execution-core-api"),
         project(":execution-kernel:execution-core-core"),
         project(":execution-kernel:execution-sql-api"),
@@ -552,6 +588,22 @@ def allowedProjectDependencies = [
                 ":data-kernel:datasource-connectivity-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
+        ":data-kernel:lineage-api": [
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:lineage-core": [
+                ":data-kernel:lineage-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:quality-profiler-api": [
+                ":execution-kernel:execution-core-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
+        ":data-kernel:quality-profiler-core": [
+                ":data-kernel:quality-profiler-api",
+                ":execution-kernel:execution-core-api",
+                ":platform-kernel:shared-types-api"
+        ] as Set,
         ":execution-kernel:execution-core-api": [
                 ":platform-kernel:shared-types-api"
         ] as Set,
@@ -631,6 +683,8 @@ def allowedProjectDependencies = [
                 ":integration-kernel:llm-provider-adapters-api",
                 ":data-kernel:datasource-connectivity-core",
                 ":data-kernel:metadata-catalog-core",
+                ":data-kernel:lineage-core",
+                ":data-kernel:quality-profiler-core",
                 ":execution-kernel:execution-core-core",
                 ":execution-kernel:execution-sql-core",
                 ":execution-kernel:workflow-core-core",
