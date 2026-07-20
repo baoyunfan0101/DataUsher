@@ -335,6 +335,7 @@ project(":execution-kernel:development-lifecycle-core") {
 
 project(":ai-kernel:ai-tool-contracts-api") {
     dependencies {
+        api project(":execution-kernel:execution-core-api")
         api project(":governance-kernel:resource-registry-api")
         api project(":platform-kernel:shared-types-api")
     }
@@ -343,6 +344,7 @@ project(":ai-kernel:ai-tool-contracts-api") {
 project(":ai-kernel:ai-tool-contracts-core") {
     dependencies {
         api project(":ai-kernel:ai-tool-contracts-api")
+        implementation project(":execution-kernel:execution-core-api")
         implementation project(":platform-kernel:shared-types-api")
     }
 }
@@ -759,11 +761,13 @@ def allowedProjectDependencies = [
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-tool-contracts-api": [
+                ":execution-kernel:execution-core-api",
                 ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-tool-contracts-core": [
                 ":ai-kernel:ai-tool-contracts-api",
+                ":execution-kernel:execution-core-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-context-retrieval-api": [
