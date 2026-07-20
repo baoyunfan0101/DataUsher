@@ -357,6 +357,7 @@ project(":ai-kernel:ai-context-retrieval-api") {
         api project(":data-kernel:quality-profiler-api")
         api project(":execution-kernel:execution-core-api")
         api project(":governance-kernel:identity-access-api")
+        api project(":governance-kernel:resource-registry-api")
         api project(":platform-kernel:shared-types-api")
     }
 }
@@ -369,6 +370,7 @@ project(":ai-kernel:ai-context-retrieval-core") {
         implementation project(":data-kernel:quality-profiler-api")
         implementation project(":execution-kernel:execution-core-api")
         implementation project(":governance-kernel:identity-access-api")
+        implementation project(":governance-kernel:resource-registry-api")
         implementation project(":platform-kernel:shared-types-api")
     }
 }
@@ -777,6 +779,7 @@ def allowedProjectDependencies = [
                 ":data-kernel:quality-profiler-api",
                 ":execution-kernel:execution-core-api",
                 ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-context-retrieval-core": [
@@ -786,6 +789,7 @@ def allowedProjectDependencies = [
                 ":data-kernel:quality-profiler-api",
                 ":execution-kernel:execution-core-api",
                 ":governance-kernel:identity-access-api",
+                ":governance-kernel:resource-registry-api",
                 ":platform-kernel:shared-types-api"
         ] as Set,
         ":ai-kernel:ai-guardrails-api": [
