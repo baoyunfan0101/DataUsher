@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,5 +100,15 @@ class IntegrationContractTest {
                 .contains("secret"));
         assertThrows(IllegalArgumentException.class,
                 () -> SensitiveValueRedactor.of(Set.of("")));
+    }
+
+    @Test
+    void namesAdapterOperationsWithCapabilitiesAndMutationSemantics() {
+        AdapterOperation operation = AdapterOperation.of(
+                "compute.job.submit", "compute.job.execute", true);
+
+        assertEquals("compute.job.submit", operation.name());
+        assertEquals("compute.job.execute", operation.capabilityName());
+        assertTrue(operation.mutating());
     }
 }

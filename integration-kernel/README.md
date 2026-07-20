@@ -15,6 +15,7 @@
 - Publish visualization dataset, chart, and dashboard bindings through `VisualizationAdapter`.
 - Concrete adapters must propagate interruption to vendor calls when cancellation is supported.
 - Declare supported operations with the module capability constants and register adapters through `AdapterRegistry`.
+- Use module `*Operations` constants when routing calls through `AdapterInvocationExecutor`.
 - Pass only `IntegrationValue` across dynamic data boundaries.
 - Store only opaque secret-manager URIs in `CredentialBinding`; never put secret material in options or attributes.
 - Resolve secret material through `CredentialResolver` inside adapter implementations only.
