@@ -87,4 +87,17 @@ class IntegrationContractTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> credential.secrets().put("token", new SecretString("value")));
     }
+
+    @Test
+    void redactsSensitiveValuesFromMessagesAndDetails() {
+        SensitiveValueRedactor redactor = SensitiveValueRedactor.of(Set.of(
+                "secret-token", "secret"));
+
+        assertTrue(!redactor.redact("token=secret-token").contains("secret-token"));
+        assertTrue(!redactor.redact(Map.of("detail", "password=secret"))
+                .get("detail")
+                .contains("secret"));
+        assertThrows(IllegalArgumentException.class,
+                () -> SensitiveValueRedactor.of(Set.of("")));
+    }
 }

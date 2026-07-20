@@ -18,5 +18,6 @@
 - Pass only `IntegrationValue` across dynamic data boundaries.
 - Store only opaque secret-manager URIs in `CredentialBinding`; never put secret material in options or attributes.
 - Resolve secret material through `CredentialResolver` inside adapter implementations only.
+- Redact vendor messages and details with `SensitiveValueRedactor` before exposing them.
 - Map external failures with `IntegrationErrorMapper` before returning them to business modules.
 - Run the applicable `adapter-contract-tests` checks for every concrete adapter.
