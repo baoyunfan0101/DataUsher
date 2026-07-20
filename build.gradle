@@ -411,6 +411,15 @@ project(":integration-kernel:llm-provider-adapters-contract-tests") {
     }
 }
 
+project(":adapters:datasource-jdbc-support") {
+    dependencies {
+        api project(":integration-kernel:datasource-adapters-api")
+        implementation project(":integration-kernel:integration-runtime-api")
+        testImplementation project(":integration-kernel:adapter-contract-tests")
+        testRuntimeOnly "com.h2database:h2:2.4.240"
+    }
+}
+
 project(":adapters:datasource-mysql") {
     dependencies {
         api project(":integration-kernel:datasource-adapters-api")
@@ -549,6 +558,7 @@ configure([
         project(":ai-kernel:ai-runtime-api"),
         project(":ai-kernel:ai-runtime-core"),
         project(":integration-kernel:llm-provider-adapters-contract-tests"),
+        project(":adapters:datasource-jdbc-support"),
         project(":adapters:datasource-mysql"),
         project(":adapters:compute-local-sql"),
         project(":adapters:compute-spark-sql"),
@@ -813,6 +823,10 @@ def allowedProjectDependencies = [
         ] as Set,
         ":integration-kernel:llm-provider-adapters-contract-tests": [
                 ":integration-kernel:llm-provider-adapters-api"
+        ] as Set,
+        ":adapters:datasource-jdbc-support": [
+                ":integration-kernel:datasource-adapters-api",
+                ":integration-kernel:integration-runtime-api"
         ] as Set,
         ":adapters:datasource-mysql": [
                 ":integration-kernel:datasource-adapters-api",

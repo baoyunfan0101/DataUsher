@@ -70,6 +70,7 @@ include(
     "ai-kernel:ai-runtime-api",
     "ai-kernel:ai-runtime-core",
     "integration-kernel:llm-provider-adapters-contract-tests",
+    "adapters:datasource-jdbc-support",
     "adapters:datasource-mysql",
     "adapters:compute-local-sql",
     "adapters:compute-spark-sql",
@@ -186,6 +187,8 @@ project(":ai-kernel:ai-runtime-core").projectDir =
         file("ai-kernel/ai-runtime/core")
 project(":integration-kernel:llm-provider-adapters-contract-tests").projectDir =
         file("integration-kernel/llm-provider-adapters/contract-tests")
+project(":adapters:datasource-jdbc-support").projectDir =
+        file("adapters/datasource-jdbc-support")
 project(":adapters:datasource-mysql").projectDir =
         file("adapters/datasource-mysql")
 project(":adapters:compute-local-sql").projectDir =
